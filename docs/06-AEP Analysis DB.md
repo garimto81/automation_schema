@@ -1,4 +1,4 @@
-# AEP Analysis Database Schema
+# 06. AEP Analysis Database Schema
 
 CyprusDesign.aep After Effects 프로젝트 분석 데이터를 위한 PostgreSQL 데이터베이스 스키마 설계 문서
 

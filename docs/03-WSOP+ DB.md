@@ -1,4 +1,4 @@
-# WSOP+ Database Schema
+# 03. WSOP+ Database Schema
 
 WSOP+ 플랫폼 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 

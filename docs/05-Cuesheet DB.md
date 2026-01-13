@@ -1,4 +1,4 @@
-# Cuesheet Database Schema
+# 05. Cuesheet Database Schema
 
 방송 진행 큐시트 관리를 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 

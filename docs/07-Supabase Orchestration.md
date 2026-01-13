@@ -1,4 +1,4 @@
-# Supabase Orchestration Schema
+# 07. Supabase Orchestration Schema
 
 전체 시스템 통합 및 오케스트레이션을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 

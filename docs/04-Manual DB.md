@@ -1,4 +1,4 @@
-# Manual Database Schema
+# 04. Manual Database Schema
 
 수동 플레이어 프로필 관리를 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 

@@ -1,4 +1,4 @@
-# GFX JSON Database Schema
+# 02. GFX JSON Database Schema
 
 PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
