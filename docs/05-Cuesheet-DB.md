@@ -2,9 +2,10 @@
 
 방송 진행 큐시트 관리를 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 1.0.0
+**Version**: 2.0.0
 **Date**: 2026-01-13
 **Project**: Automation DB Schema
+**Source**: [Google Sheets - WSOP SC Cyprus ME Day1A](https://docs.google.com/spreadsheets/d/1XiZqoZ3DggHdafWGEzN3PTbCNmTRSt8Ab1Ofclsoc34/edit)
 
 ---
 
@@ -15,11 +16,64 @@
 포커 방송의 진행 순서 및 GFX 출력을 관리하여:
 - 방송 세션 및 큐시트 관리
 - 개별 큐 아이템 (GFX 요소) 순서 제어
+- **핸드 히스토리 및 편집 포인트 관리**
+- **칩카운트/리더보드 데이터 연동**
 - 큐 템플릿으로 재사용 가능한 구성 저장
 - GFX 트리거 및 렌더링 상태 추적
 - 실시간 방송 진행 모니터링
 
-### 1.2 큐시트 흐름
+### 1.2 Google Sheets 원본 구조
+
+실제 운영 중인 큐시트 스프레드시트 구조:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  CUE SHEET [1016 WSOP SC Cyprus Main Event Day 1A]                          │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  시트 목록 (17개):                                                          │
+│  ├── INFO          : 이벤트 요약 (블록별 핸드 수, 런타임)                   │
+│  ├── LIVE          : 방송 진행용 메인 큐시트 ⭐                             │
+│  ├── FRONT         : 타임라인 기반 전체 큐 (MAIN/SUB/VIRTUAL)              │
+│  ├── PD            : PD용 타임라인 (편집 지시)                              │
+│  ├── SUBTITLE      : 자막팀용 타임라인                                      │
+│  ├── main          : MAIN 테이블 핸드 타임라인                              │
+│  ├── sub           : SUB 테이블 핸드 타임라인                               │
+│  ├── virtual       : 버추얼 GFX 타임라인                                    │
+│  ├── chipcount     : 실시간 칩카운트 (포커캐스터 연동)                      │
+│  ├── leaderboard   : 전체 리더보드                                          │
+│  ├── payout        : 상금 구조                                              │
+│  ├── template      : GFX 템플릿 정의                                        │
+│  ├── for ZED       : ZED(외주 편집) 전달용                                  │
+│  └── ati-*         : ATI 시스템 연동용                                      │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.3 LIVE 시트 컬럼 구조 (핵심)
+
+| 컬럼 | 필드명 | 설명 | 예시 |
+|------|--------|------|------|
+| A | special_info | 특별 정보 | "2-TIME BRACELET WINNER" |
+| B | content_type | 콘텐츠 타입 | OPENING SEQUENCE, MAIN, SUB, VIRTUAL |
+| C | hand_number | 핸드 번호 | 1, 2, 3... (최대 176) |
+| D | rank | 핸드 등급 | A, B, B-, C |
+| E | hand_history | 핸드 히스토리 | "Pre: AK RAISE\\nFlop: ..." |
+| F | edit_point | 편집 시작점 | "프리플랍부터" |
+| G | pd_note | PD 노트 | "WINNER: COHEN" |
+| H | time | 촬영 시간 | "14:36" |
+| I | subtitle_flag | 자막 필요 여부 | TRUE/FALSE |
+| J | blind_level | 블라인드 | "300 / 500" |
+| K | subtitle_confirm | 자막 (컨펌용) | 자막 텍스트 |
+| L | subtitle_team | 자막 (자막팀) | 자막팀 버전 |
+| M | post_flag | 사후 제작 여부 | TRUE/FALSE |
+| N | copy_status | 복사 상태 | "복사완료" |
+| O | file_name | 파일명 | "A_0003", "B_0004" |
+| P | transition | 전환 효과 | - |
+| Q | timecode_in | 시작 타임코드 | "00:01:25" |
+| R | timecode_out | 종료 타임코드 | "00:01:55" |
+
+### 1.4 큐시트 흐름
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -30,29 +84,31 @@
 │   방송 세션    │────▶│   큐시트      │────▶│   큐 아이템    │
 │   (Session)   │  1:N│   (Sheet)     │  1:N│   (Item)      │
 └───────────────┘     └───────────────┘     └───────┬───────┘
-                                                    │
-                                                    │ trigger
-                                                    ▼
-                      ┌───────────────┐     ┌───────────────┐
-                      │   큐 템플릿    │     │  GFX 트리거   │
-                      │   (Template)  │────▶│   (Trigger)   │
-                      └───────────────┘     └───────┬───────┘
-                                                    │
-                                                    │ render
-                                                    ▼
-                                            ┌───────────────┐
-                                            │   AEP 렌더    │
-                                            │   (Output)    │
-                                            └───────────────┘
+        │                                          │
+        │                                          │ trigger
+        │                                          ▼
+        │            ┌───────────────┐     ┌───────────────┐
+        │            │   큐 템플릿    │     │  GFX 트리거   │
+        │            │   (Template)  │────▶│   (Trigger)   │
+        │            └───────────────┘     └───────┬───────┘
+        │                                          │
+        │   1:N                                    │ render
+        ▼                                          ▼
+┌───────────────┐                          ┌───────────────┐
+│   칩카운트    │                          │   AEP 렌더    │
+│ (ChipSnapshot)│                          │   (Output)    │
+└───────────────┘                          └───────────────┘
 ```
 
-### 1.3 핵심 기능
+### 1.5 핵심 기능
 
 | 기능 | 설명 |
 |------|------|
-| **세션 관리** | 방송 일정, 스태프, 상태 관리 |
+| **세션 관리** | 방송 일정, 블록별 통계, 런타임 관리 |
 | **큐시트 관리** | 방송 구간별 큐시트 구성 |
 | **큐 아이템** | 개별 GFX 요소 순서/타이밍 제어 |
+| **핸드 히스토리** | Pre/Flop/Turn/River 액션 기록 |
+| **칩카운트 스냅샷** | 실시간 칩 현황 스냅샷 저장 |
 | **템플릿** | 재사용 가능한 큐 구성 저장 |
 | **트리거 로그** | GFX 송출 이력 추적 |
 
@@ -62,7 +118,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                          Cuesheet Database Schema                            │
+│                    Cuesheet Database Schema v2.0                             │
+│                  (Based on Google Sheets Analysis)                           │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌──────────────────────┐
@@ -70,72 +127,76 @@
 │  (방송 세션)          │
 ├──────────────────────┤
 │ PK id: uuid          │
-│ UK session_code: text│───┐
+│ UK session_code: text│───┐     예: "1016-WSOP-SC-ME-D1A"
 │    event_name: text  │   │
 │    event_id: uuid    │   │  FK to wsop_events (optional)
 │    broadcast_date    │   │
-│    scheduled_start   │   │
+│    scheduled_start   │   │     예: 13:00 (Cyprus)
 │    scheduled_end     │   │
 │    actual_start      │   │
 │    actual_end        │   │
+│    total_runtime     │   │     예: "06:49:19"
 │    status: enum      │   │
 │    director: text    │   │
-│    technical_director│   │
 │    commentators: jsonb│  │
+│    block_stats: jsonb│   │     블록별 핸드 수, 런타임
 │    settings: jsonb   │   │
-│    notes: text       │   │
 │    created_at        │   │
 │    updated_at        │   │
 └──────────┬───────────┘   │
            │               │
            │ 1:N           │
            ▼               │
-┌──────────────────────┐   │
-│     cue_sheets       │   │
-│     (큐시트)         │   │
-├──────────────────────┤   │
-│ PK id: uuid          │   │
-│ UK sheet_code: text  │   │
-│ FK session_id: uuid  │◄──┘
-│    sheet_name: text  │
-│    sheet_type: enum  │
-│    sheet_order: int  │
-│    version: int      │
-│    status: enum      │
-│    total_items: int  │
-│    completed_items   │
-│    current_item_id   │───────────────────┐
-│    notes: text       │                   │
-│    created_by        │                   │
-│    created_at        │                   │
-│    updated_at        │                   │
-└──────────┬───────────┘                   │
-           │                               │
-           │ 1:N                           │
-           ▼                               │
-┌──────────────────────┐                   │
-│     cue_items        │◄──────────────────┘
-│   (큐 아이템)        │
-├──────────────────────┤
-│ PK id: uuid          │
-│ FK sheet_id: uuid    │
-│ FK template_id: uuid │◄──────────────────┐
-│    cue_number: text  │                   │
-│    cue_type: enum    │                   │
-│    title: text       │                   │
-│    description: text │                   │
-│    gfx_template_name │                   │
-│    gfx_comp_name     │                   │
-│    gfx_data: jsonb   │                   │
-│    duration_seconds  │                   │
-│    scheduled_time    │                   │
-│    actual_time       │                   │
-│    status: enum      │                   │
-│    sort_order: int   │                   │
-│    depends_on: uuid[]│                   │
-│    notes: text       │                   │
-│    created_at        │                   │
-│    updated_at        │                   │
+┌──────────────────────┐   │   ┌──────────────────────┐
+│     cue_sheets       │   │   │  chip_snapshots      │
+│     (큐시트)         │   │   │  (칩카운트 스냅샷)   │
+├──────────────────────┤   │   ├──────────────────────┤
+│ PK id: uuid          │   │   │ PK id: uuid          │
+│ UK sheet_code: text  │   │   │ FK session_id: uuid  │◄─┐
+│ FK session_id: uuid  │◄──┘   │    snapshot_time     │  │
+│    sheet_name: text  │       │    blind_level: text │  │
+│    sheet_type: enum  │       │    players_remaining │  │
+│    sheet_order: int  │       │    avg_stack: int    │  │
+│    status: enum      │       │    total_chips: bigint│ │
+│    total_items: int  │       │    data: jsonb       │  │
+│    current_item_id   │───┐   │    created_at        │  │
+│    created_at        │   │   └──────────────────────┘  │
+│    updated_at        │   │                             │
+└──────────┬───────────┘   │                             │
+           │               │                             │
+           │ 1:N           │                             │
+           ▼               │                             │
+┌──────────────────────┐   │                             │
+│     cue_items        │◄──┘                             │
+│   (큐 아이템)        │                                 │
+├──────────────────────┤     ⭐ LIVE 시트 매핑          │
+│ PK id: uuid          │                                 │
+│ FK sheet_id: uuid    │                                 │
+│ FK template_id: uuid │◄─────────────────────┐         │
+│ FK snapshot_id: uuid │─────────────────────────────────┘
+│    content_type: enum│     MAIN, SUB, VIRTUAL, OPENING
+│    hand_number: int  │     핸드 번호 (1-176)
+│    hand_rank: text   │     A, B, B-, C
+│    hand_history: text│     Pre/Flop/Turn/River 액션
+│    edit_point: text  │     "프리플랍부터"
+│    pd_note: text     │     "WINNER: COHEN"
+│    recording_time    │     촬영 시간 (14:36)
+│    subtitle_flag     │     자막 필요 여부
+│    blind_level: text │     "300 / 500"
+│    subtitle_confirm  │     자막 (컨펌용)
+│    subtitle_team     │     자막 (자막팀용)
+│    post_flag: bool   │     사후 제작 여부
+│    copy_status: text │     "복사완료"
+│    file_name: text   │     "A_0003", "B_0004"
+│    timecode_in: text │     "00:01:25"
+│    timecode_out: text│     "00:01:55"
+│    transition: text  │     전환 효과
+│    special_info: text│     "2-TIME BRACELET WINNER"
+│    gfx_data: jsonb   │     GFX 바인딩 데이터
+│    status: enum      │     pending, on_air, completed
+│    sort_order: int   │
+│    created_at        │
+│    updated_at        │
 └──────────┬───────────┘                   │
            │                               │
            │ 1:N                           │
@@ -147,21 +208,15 @@
 │ PK id: uuid          │   │ PK id: uuid          │
 │ FK cue_item_id: uuid │   │ UK template_code     │───┘
 │ FK session_id: uuid  │   │    template_name     │
-│    trigger_type: enum│   │    cue_type: enum    │
+│    trigger_type: enum│   │    template_type     │  MINI_CHIP, PAYOUT, etc.
 │    trigger_time: ts  │   │    gfx_template_name │
-│    triggered_by: text│   │    gfx_comp_name     │
-│    aep_comp_name     │   │    default_duration  │
+│    triggered_by: text│   │    default_duration  │
 │    gfx_data: jsonb   │   │    data_schema: jsonb│
 │    render_status:enum│   │    sample_data: jsonb│
-│    render_job_id     │   │    preview_image_url │
-│    output_path: text │   │    category: text    │
-│    output_format     │   │    tags: text[]      │
-│    error_message     │   │    is_active: bool   │
-│    duration_ms: int  │   │    usage_count: int  │
-│    created_at        │   │    created_by        │
-└──────────────────────┘   │    created_at        │
-                           │    updated_at        │
-                           └──────────────────────┘
+│    output_path: text │   │    is_active: bool   │
+│    duration_ms: int  │   │    created_at        │
+│    created_at        │   │    updated_at        │
+└──────────────────────┘   └──────────────────────┘
 ```
 
 ### 테이블 관계 요약
@@ -169,8 +224,10 @@
 | 관계 | 설명 |
 |------|------|
 | `broadcast_sessions` 1:N `cue_sheets` | 세션당 여러 큐시트 |
+| `broadcast_sessions` 1:N `chip_snapshots` | 세션당 여러 칩 스냅샷 |
 | `cue_sheets` 1:N `cue_items` | 큐시트당 여러 아이템 |
 | `cue_items` 1:N `gfx_triggers` | 아이템당 여러 트리거 |
+| `cue_items` N:1 `chip_snapshots` | 아이템이 특정 스냅샷 참조 |
 | `cue_templates` 1:N `cue_items` | 템플릿 → 아이템 참조 |
 | `cue_sheets.current_item_id` → `cue_items` | 현재 진행 중 아이템 |
 
@@ -219,42 +276,65 @@ CREATE TYPE cue_sheet_status AS ENUM (
     'archived'          -- 아카이브
 );
 
--- 큐 아이템 타입
+-- 큐 콘텐츠 타입 (LIVE 시트의 Content 컬럼)
+-- Google Sheets 원본: OPENING SEQUENCE, Leaderboard, MAIN, SUB, VIRTUAL
+CREATE TYPE cue_content_type AS ENUM (
+    'opening_sequence',     -- 오프닝 시퀀스 (Intro, Location, Commentators 등)
+    'main',                 -- 메인 테이블 핸드
+    'sub',                  -- 서브 테이블 핸드
+    'virtual',              -- 버추얼 GFX (플레이어 소개 등)
+    'leaderboard',          -- 리더보드/칩카운트
+    'break',                -- 휴식
+    'closing'               -- 클로징
+);
+
+-- 큐 아이템 타입 (GFX 요소 분류)
 CREATE TYPE cue_item_type AS ENUM (
+    -- 오프닝/클로징 관련
+    'intro',                -- 인트로
+    'location',             -- 장소 소개
+    'commentators',         -- 해설자 소개
+    'broadcast_schedule',   -- 방송 일정
+    'event_info',           -- 이벤트 정보
+    'payouts',              -- 상금 구조
+
     -- 칩/순위 관련
     'chip_count',           -- 칩 카운트
-    'chip_comparison',      -- 칩 비교
+    'mini_chip_table',      -- 미니 칩 테이블 (좌/우)
     'leaderboard',          -- 순위표
-    'chip_flow',            -- 칩 흐름
+    'chip_flow',            -- 칩 변동 그래프
+    'chip_comparison',      -- 칩 비교
+    'chips_in_play',        -- 칩 인 플레이
 
     -- 플레이어 관련
+    'player_profile',       -- 선수 프로필 (L3_Profile)
     'player_info',          -- 선수 정보
-    'player_profile',       -- 선수 프로필
-    'player_stats',         -- 선수 통계
-    'heads_up',             -- 헤즈업 정보
-
-    -- 이벤트 관련
-    'event_info',           -- 이벤트 정보
-    'event_schedule',       -- 이벤트 일정
-    'payout',               -- 상금 구조
     'elimination',          -- 탈락 정보
+    'elimination_risk',     -- 탈락 위험
+    'money_list',           -- 역대 상금 순위
 
     -- 핸드 관련
-    'hand_replay',          -- 핸드 리플레이
-    'hand_highlight',       -- 핸드 하이라이트
+    'hand_main',            -- 메인 테이블 핸드
+    'hand_sub',             -- 서브 테이블 핸드
 
-    -- 스태프
-    'commentator',          -- 해설자
-    'reporter',             -- 리포터
-    'staff',                -- 스태프
+    -- 통계
+    'vpip',                 -- VPIP 통계
+    'blinds_info',          -- 블라인드 정보
 
     -- 전환/기타
     'transition',           -- 전환 화면
-    'lower_third',          -- 하단 자막
-    'fullscreen',           -- 전체 화면
-    'bumper',               -- 범퍼 (짧은 전환)
+    'bumper',               -- 범퍼
     'sponsor',              -- 스폰서
     'custom'                -- 커스텀
+);
+
+-- 핸드 등급 (A, B, B-, C)
+CREATE TYPE cue_hand_rank AS ENUM (
+    'A',      -- A급 (하이라이트)
+    'B',      -- B급 (중요)
+    'B-',     -- B-급 (보통)
+    'C',      -- C급 (필러)
+    'SOFT'    -- 소프트 콘텐츠 (버추얼 GFX 등)
 );
 
 -- 큐 아이템 상태
@@ -457,12 +537,12 @@ ALTER TABLE cue_sheets
     DEFERRABLE INITIALLY DEFERRED;
 ```
 
-### 4.3 cue_items (큐 아이템)
+### 4.3 cue_items (큐 아이템) - LIVE 시트 매핑
 
 ```sql
 -- ============================================================================
 -- cue_items: 개별 큐 아이템
--- 하나의 GFX 요소에 대한 정보
+-- Google Sheets LIVE 시트의 각 행에 대응
 -- ============================================================================
 
 CREATE TABLE cue_items (
@@ -474,14 +554,89 @@ CREATE TABLE cue_items (
     -- 템플릿 참조 (선택적)
     template_id UUID REFERENCES cue_templates(id) ON DELETE SET NULL,
 
-    -- 큐 식별
-    cue_number TEXT NOT NULL,  -- 예: "Q01", "Q02-A"
-    cue_type cue_item_type NOT NULL,
+    -- 칩 스냅샷 참조 (해당 시점의 칩카운트)
+    snapshot_id UUID REFERENCES chip_snapshots(id) ON DELETE SET NULL,
 
-    -- 기본 정보
-    title TEXT NOT NULL,
-    description TEXT,
-    notes TEXT,
+    -- =========================================================================
+    -- LIVE 시트 컬럼 매핑 (A-R)
+    -- =========================================================================
+
+    -- A열: 특별 정보 (2-TIME BRACELET WINNER 등)
+    special_info TEXT,
+
+    -- B열: 콘텐츠 타입
+    content_type cue_content_type NOT NULL,  -- OPENING SEQUENCE, MAIN, SUB, VIRTUAL
+
+    -- C열: 핸드 번호 (1-176)
+    hand_number INTEGER,
+
+    -- D열: 핸드 등급
+    hand_rank cue_hand_rank,  -- A, B, B-, C, SOFT
+
+    -- E열: 핸드 히스토리
+    hand_history TEXT,
+    /*
+    예시:
+    "Pre: SOKRUTA AK RAISE, GABDULLIN 44 CALL
+    Flop: 44 CHECK, AK BET, 44 RAISE, AK CALL
+    Turn: 44 BET, AK CALL
+    River: 44 BET, AK CALL"
+    */
+
+    -- F열: 편집 포인트 (시작점)
+    edit_point TEXT,  -- "프리플랍부터", "플랍부터"
+
+    -- G열: PD 노트
+    pd_note TEXT,  -- "WINNER: COHEN", "GABDULLIN 44 WIN"
+
+    -- H열: 촬영 시간
+    recording_time TIME,  -- 14:36
+
+    -- I열: 자막 필요 여부
+    subtitle_flag BOOLEAN DEFAULT FALSE,
+
+    -- J열: 블라인드 레벨
+    blind_level TEXT,  -- "300 / 500"
+
+    -- K열: 자막 (컨펌용)
+    subtitle_confirm TEXT,
+    /*
+    예시:
+    "[LEFT]MINI_CHIP_TABLE 24
+    GLOSHKIN / 86,500
+    ASMOLOVA / 75,200
+    ...
+    BLINDS 300/500 - 500 (BB)"
+    */
+
+    -- L열: 자막 (자막팀용)
+    subtitle_team TEXT,
+
+    -- M열: 사후 제작 여부
+    post_flag BOOLEAN DEFAULT FALSE,
+
+    -- N열: 복사 상태
+    copy_status TEXT,  -- "복사완료"
+
+    -- O열: 파일명
+    file_name TEXT,  -- "A_0003", "B_0004", "1809_SC001_Georgios_Tsouloftas_L3_Profile"
+
+    -- P열: 전환 효과
+    transition TEXT,
+
+    -- Q열: 시작 타임코드
+    timecode_in TEXT,  -- "00:01:25"
+
+    -- R열: 종료 타임코드
+    timecode_out TEXT,  -- "00:01:55"
+
+    -- =========================================================================
+    -- 기존 필드 (유지)
+    -- =========================================================================
+
+    -- 큐 식별
+    cue_number TEXT,  -- 자동 생성: "Q001", "Q002"
+    cue_type cue_item_type,  -- GFX 요소 타입
 
     -- GFX 정보
     gfx_template_name TEXT,  -- AEP 템플릿명
@@ -489,52 +644,17 @@ CREATE TABLE cue_items (
 
     -- GFX 데이터 (동적 바인딩)
     gfx_data JSONB DEFAULT '{}'::JSONB,
-    /*
-    {
-        "player_name": "홍길동",
-        "chips": 1500000,
-        "rank": 1,
-        "country_code": "KR"
-    }
-    */
-
-    -- 데이터 소스 (어디서 데이터를 가져올지)
-    data_source JSONB DEFAULT '{}'::JSONB,
-    /*
-    {
-        "type": "wsop_event_players",
-        "event_id": "uuid",
-        "player_count": 10,
-        "sort_by": "current_chips DESC"
-    }
-    */
 
     -- 타이밍
     duration_seconds INTEGER DEFAULT 10,
-    scheduled_time TIMESTAMPTZ,  -- 예정 시간
-    actual_time TIMESTAMPTZ,     -- 실제 송출 시간
-    fade_in_ms INTEGER DEFAULT 500,
-    fade_out_ms INTEGER DEFAULT 500,
+    scheduled_time TIMESTAMPTZ,
+    actual_time TIMESTAMPTZ,
 
     -- 순서
     sort_order INTEGER NOT NULL DEFAULT 0,
 
-    -- 의존성 (다른 아이템 완료 후 실행)
-    depends_on UUID[] DEFAULT ARRAY[]::UUID[],
-
     -- 상태
     status cue_item_status DEFAULT 'pending',
-    skip_reason TEXT,  -- 건너뛴 경우 이유
-
-    -- 렌더링 정보
-    pre_render BOOLEAN DEFAULT FALSE,  -- 미리 렌더링 여부
-    render_status cue_render_status DEFAULT 'pending',
-    cached_output_path TEXT,
-
-    -- 반복 설정
-    repeat_count INTEGER DEFAULT 1,
-    repeat_interval_seconds INTEGER DEFAULT 0,
-    current_repeat INTEGER DEFAULT 0,
 
     -- 관리 정보
     created_by TEXT,
@@ -551,63 +671,171 @@ CREATE TABLE cue_items (
 
 -- 인덱스
 CREATE INDEX idx_cue_items_sheet ON cue_items(sheet_id);
-CREATE INDEX idx_cue_items_type ON cue_items(cue_type);
+CREATE INDEX idx_cue_items_content_type ON cue_items(content_type);
+CREATE INDEX idx_cue_items_hand_number ON cue_items(hand_number) WHERE hand_number IS NOT NULL;
 CREATE INDEX idx_cue_items_status ON cue_items(status);
 CREATE INDEX idx_cue_items_order ON cue_items(sheet_id, sort_order);
 CREATE INDEX idx_cue_items_template ON cue_items(template_id);
-CREATE INDEX idx_cue_items_scheduled ON cue_items(scheduled_time) WHERE scheduled_time IS NOT NULL;
+CREATE INDEX idx_cue_items_snapshot ON cue_items(snapshot_id);
+CREATE INDEX idx_cue_items_file_name ON cue_items(file_name) WHERE file_name IS NOT NULL;
 CREATE INDEX idx_cue_items_gfx_data ON cue_items USING GIN (gfx_data);
 ```
 
-### 4.4 cue_templates (큐 템플릿)
+### 4.3.1 chip_snapshots (칩카운트 스냅샷)
+
+```sql
+-- ============================================================================
+-- chip_snapshots: 칩카운트 스냅샷
+-- Google Sheets chipcount/leaderboard 시트 데이터
+-- ============================================================================
+
+CREATE TABLE chip_snapshots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- 세션 참조
+    session_id UUID NOT NULL REFERENCES broadcast_sessions(id) ON DELETE CASCADE,
+
+    -- 스냅샷 시점
+    snapshot_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    -- 블라인드 정보
+    blind_level TEXT,  -- "300 / 500"
+    blind_bb INTEGER,  -- 500
+
+    -- 전체 통계
+    players_remaining INTEGER,
+    total_chips BIGINT,
+    avg_stack INTEGER,
+
+    -- 플레이어별 칩카운트 (JSONB)
+    players_data JSONB NOT NULL DEFAULT '[]'::JSONB,
+    /*
+    [
+        {
+            "rank": 1,
+            "poker_room": "Main",
+            "table_name": "Red",
+            "table_id": 43748,
+            "table_no": 24,
+            "seat_id": 435388,
+            "seat_no": 3,
+            "player_id": 101437,
+            "player_name": "Oscar Romero Cobos",
+            "player_name_display": "OSCAR COBOS",
+            "nationality": "ES",
+            "chipcount": 154500,
+            "bb_stack": 103
+        },
+        ...
+    ]
+    */
+
+    -- 메타데이터
+    source TEXT DEFAULT 'pokercaster',  -- 데이터 소스
+    notes TEXT,
+
+    -- 타임스탬프
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 인덱스
+CREATE INDEX idx_chip_snapshots_session ON chip_snapshots(session_id);
+CREATE INDEX idx_chip_snapshots_time ON chip_snapshots(snapshot_time DESC);
+CREATE INDEX idx_chip_snapshots_players ON chip_snapshots USING GIN (players_data);
+```
+
+### 4.4 cue_templates (큐 템플릿) - template 시트 매핑
 
 ```sql
 -- ============================================================================
 -- cue_templates: 재사용 가능한 큐 템플릿
--- 자주 사용하는 큐 구성을 템플릿으로 저장
+-- Google Sheets template 시트의 GFX 템플릿 정의
 -- ============================================================================
+
+-- 템플릿 타입 (Google Sheets template 시트 기반)
+CREATE TYPE cue_template_type AS ENUM (
+    -- 칩카운트 관련
+    'mini_chip_left',       -- [LEFT]MINI_CHIP_TABLE
+    'mini_chip_right',      -- [RIGHT]MINI_CHIP_TABLE
+    'feature_table_chip',   -- Feature Table Chipcounts
+
+    -- Payout 관련
+    'mini_payouts',         -- [LEFT]MINI_PAYOUTS_TABLE
+
+    -- 플레이어 상태
+    'elimination_risk',     -- [ELIMINATION AT RISK]
+    'current_stack',        -- CURRENT STACK
+    'eliminated',           -- ELIMINATED IN Xth PLACE
+    'money_list',           -- MONEY LIST (All Time)
+
+    -- 게임 정보
+    'chips_in_play',        -- [CHIPS IN PLAY]
+    'vpip',                 -- [VPIP]
+    'chip_flow',            -- [CHIP FLOW]
+    'chip_comparison',      -- [CHIP COMPARISON]
+    'blinds',               -- [BLINDS_좌하단]
+
+    -- 기타
+    'player_profile',       -- L3_Profile
+    'custom'                -- 커스텀
+);
 
 CREATE TABLE cue_templates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- 템플릿 식별
-    template_code TEXT NOT NULL UNIQUE,  -- 예: "TPL-CHIP-COUNT-10"
+    template_code TEXT NOT NULL UNIQUE,  -- 예: "TPL-MINI-CHIP-LEFT"
 
     -- 기본 정보
     template_name TEXT NOT NULL,
     description TEXT,
-    cue_type cue_item_type NOT NULL,
+    template_type cue_template_type NOT NULL,
+
+    -- 위치 설정
+    position TEXT,  -- 'LEFT', 'RIGHT', 'CENTER'
 
     -- GFX 정보
     gfx_template_name TEXT,
     gfx_comp_name TEXT,
 
     -- 기본 설정
-    default_duration INTEGER DEFAULT 10,  -- 초
-    default_fade_in_ms INTEGER DEFAULT 500,
-    default_fade_out_ms INTEGER DEFAULT 500,
+    default_duration INTEGER DEFAULT 10,
 
     -- 데이터 스키마 (필수 필드 정의)
     data_schema JSONB DEFAULT '{}'::JSONB,
+
+    -- 샘플 데이터 (미리보기용) - Google Sheets template 시트의 예시
+    sample_data JSONB DEFAULT '{}'::JSONB,
     /*
+    Mini Chip Table 예시:
     {
-        "required": ["player_name", "chips"],
-        "optional": ["rank", "country_code"],
-        "types": {
-            "player_name": "string",
-            "chips": "number",
-            "rank": "number",
-            "country_code": "string"
-        }
+        "table_no": 24,
+        "players": [
+            {"name": "GLOSHKIN", "chips": 114800, "is_winner": true},
+            {"name": "ASMOLOVA", "chips": 75200},
+            ...
+        ],
+        "blinds": "300/500 - 500 (BB)"
+    }
+
+    VPIP 예시:
+    {
+        "player_name": "BAGIROV",
+        "country": "RUSSIA",
+        "vpip_percent": 72
+    }
+
+    Chip Flow 예시:
+    {
+        "player_name": "BAGIROV",
+        "country": "RUSSIA",
+        "chip_history": [685000, 785000, 1785000, 2785000, 3785000],
+        "period": "LAST 20 HANDS"
     }
     */
 
-    -- 샘플 데이터 (미리보기용)
-    sample_data JSONB DEFAULT '{}'::JSONB,
-
     -- 미리보기 이미지
     preview_image_url TEXT,
-    preview_video_url TEXT,
 
     -- 분류
     category TEXT,
@@ -615,15 +843,13 @@ CREATE TABLE cue_templates (
 
     -- 상태
     is_active BOOLEAN DEFAULT TRUE,
-    is_featured BOOLEAN DEFAULT FALSE,
 
     -- 사용 통계
     usage_count INTEGER DEFAULT 0,
     last_used_at TIMESTAMPTZ,
 
     -- 관리 정보
-    created_by TEXT NOT NULL,
-    approved_by TEXT,
+    created_by TEXT,
 
     -- 타임스탬프
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -632,10 +858,9 @@ CREATE TABLE cue_templates (
 
 -- 인덱스
 CREATE INDEX idx_cue_templates_code ON cue_templates(template_code);
-CREATE INDEX idx_cue_templates_type ON cue_templates(cue_type);
+CREATE INDEX idx_cue_templates_type ON cue_templates(template_type);
 CREATE INDEX idx_cue_templates_category ON cue_templates(category);
 CREATE INDEX idx_cue_templates_active ON cue_templates(is_active) WHERE is_active = TRUE;
-CREATE INDEX idx_cue_templates_featured ON cue_templates(is_featured) WHERE is_featured = TRUE;
 CREATE INDEX idx_cue_templates_tags ON cue_templates USING GIN (tags);
 CREATE INDEX idx_cue_templates_usage ON cue_templates(usage_count DESC);
 ```
@@ -1404,5 +1629,119 @@ CREATE POLICY "gfx_triggers_insert_service"
   },
   "prize_won": 25000,
   "elimination_hand": "AA vs KK"
+}
+```
+
+---
+
+## Appendix B: Google Sheets 원본 데이터 매핑
+
+### B.1 스프레드시트 정보
+
+| 항목 | 값 |
+|------|-----|
+| **URL** | [Google Sheets](https://docs.google.com/spreadsheets/d/1XiZqoZ3DggHdafWGEzN3PTbCNmTRSt8Ab1Ofclsoc34/edit) |
+| **제목** | CUE SHEET [1016 WSOP SC Cyprus Main Event Day 1A] |
+| **시트 수** | 17개 |
+
+### B.2 시트별 매핑
+
+| 시트 | GID | DB 테이블 | 설명 |
+|------|-----|-----------|------|
+| INFO | 1451613436 | `broadcast_sessions.block_stats` | 블록별 통계 |
+| **LIVE** | 390049308 | `cue_items` | 메인 큐시트 ⭐ |
+| FRONT | 1427920466 | (참조용) | 타임라인 기반 전체 뷰 |
+| PD | 481406284 | (참조용) | PD용 타임라인 |
+| SUBTITLE | 1333911885 | (참조용) | 자막팀용 타임라인 |
+| main | 495054819 | (참조용) | MAIN 테이블 타임라인 |
+| sub | 360071413 | (참조용) | SUB 테이블 타임라인 |
+| virtual | 561799849 | (참조용) | VIRTUAL GFX 타임라인 |
+| **chipcount** | 863418569 | `chip_snapshots` | 실시간 칩카운트 |
+| leaderboard | 369994611 | `chip_snapshots` | 전체 리더보드 |
+| **payout** | 1594013979 | (별도 스키마) | 상금 구조 |
+| **template** | 487939277 | `cue_templates` | GFX 템플릿 정의 |
+| for ZED | 1519464196 | (외부 연동) | ZED 전달용 |
+| ati-* | - | (외부 연동) | ATI 시스템 연동 |
+
+### B.3 LIVE 시트 컬럼 → cue_items 필드 매핑
+
+| 컬럼 | 시트 헤더 | DB 필드 | 타입 |
+|------|----------|---------|------|
+| A | (특별 정보) | `special_info` | TEXT |
+| B | Content | `content_type` | ENUM |
+| C | # (핸드 번호) | `hand_number` | INTEGER |
+| D | Rank | `hand_rank` | ENUM |
+| E | Hand History | `hand_history` | TEXT |
+| F | Edit Point | `edit_point` | TEXT |
+| G | PD Note | `pd_note` | TEXT |
+| H | Time | `recording_time` | TIME |
+| I | SUBTITLE (플래그) | `subtitle_flag` | BOOLEAN |
+| J | Blind | `blind_level` | TEXT |
+| K | Subtitle (컨펌용) | `subtitle_confirm` | TEXT |
+| L | Subtitle (자막팀) | `subtitle_team` | TEXT |
+| M | POST | `post_flag` | BOOLEAN |
+| N | 📋 (복사상태) | `copy_status` | TEXT |
+| O | File Name | `file_name` | TEXT |
+| P | Transition | `transition` | TEXT |
+| Q | In | `timecode_in` | TEXT |
+| R | Out | `timecode_out` | TEXT |
+
+### B.4 chipcount 시트 컬럼 → chip_snapshots.players_data 매핑
+
+| 컬럼 | 시트 헤더 | JSON 필드 |
+|------|----------|-----------|
+| A | Rank | `rank` |
+| B | PokerRoom | `poker_room` |
+| C | TableName | `table_name` |
+| D | TableId | `table_id` |
+| E | TableNo | `table_no` |
+| F | SeatId | `seat_id` |
+| G | SeatNo | `seat_no` |
+| H | PlayerId | `player_id` |
+| I | PlayerName | `player_name` |
+| J | Nationality | `nationality` |
+| K | Chipcount | `chipcount` |
+| L | BB | `bb_stack` |
+| P | (OUTPUT용) | `player_name_display` |
+
+### B.5 실제 데이터 예시 (LIVE 시트)
+
+```json
+{
+  "content_type": "main",
+  "hand_number": 1,
+  "hand_rank": "A",
+  "hand_history": "Pre: SOKRUTA AK RAISE, GABDULLIN 44 CALL\nFlop: 44 CHECK, AK BET, 44 RAISE, AK CALL\nTurn: 44 BET, AK CALL\nRiver: 44 BET, AK CALL",
+  "edit_point": "처음부터 모두 써주세요.",
+  "pd_note": "GABDULLIN 44 WIN",
+  "recording_time": "14:36",
+  "subtitle_flag": false,
+  "blind_level": "300 / 500",
+  "copy_status": "복사완료",
+  "file_name": "A_0003"
+}
+```
+
+### B.6 실제 데이터 예시 (VIRTUAL/플레이어 소개)
+
+```json
+{
+  "content_type": "virtual",
+  "hand_number": 1,
+  "hand_rank": "SOFT",
+  "pd_note": "소프트 콘텐츠\n'플레이어 소개'",
+  "recording_time": "13:11",
+  "subtitle_flag": true,
+  "subtitle_confirm": "플레이어 소개\nGEORGIOS TSOULOFTAS / CYPRUS\n2ND ON CYPRUS ALL TIME MONEY LIST ($2,084,179)",
+  "copy_status": "복사완료",
+  "file_name": "1809_SC001_Georgios_Tsouloftas_L3_Profile"
+}
+```
+
+### B.7 실제 데이터 예시 (Mini Chip Table 자막)
+
+```json
+{
+  "subtitle_confirm": "[LEFT]MINI_CHIP_TABLE 24\nGLOSHKIN / 86,500\nASMOLOVA / 75,200\nCOBOS / 62,500\nGARCIA / 49,000\nISTOMIN / 46,500 (WINNER)\nKORENEV / 46,000\nCOHEN / 43,800\nCHUDAPAL / 40,500\nBLINDS 300/500 - 500 (BB)"
 }
 ```

@@ -1072,6 +1072,26 @@ SELECT
 
 FROM gfx_sessions gs
 
+UNION ALL
+
+SELECT
+    'cuesheet' AS source,
+    bs.id AS source_id,
+    bs.session_code AS source_code,
+    bs.event_name AS name,
+    'broadcast' AS event_type,
+    bs.broadcast_date AS start_date,
+    bs.broadcast_date AS end_date,
+    NULL AS buy_in,
+    NULL AS prize_pool,
+    bs.total_cue_items AS total_entries,
+    bs.status::TEXT AS status,
+    NULL AS venue,
+    bs.created_at,
+    bs.updated_at
+
+FROM broadcast_sessions bs
+
 ORDER BY start_date DESC;
 ```
 
@@ -1120,6 +1140,25 @@ SELECT
 FROM gfx_hand_players ghp
 JOIN gfx_hands gh ON ghp.hand_id = gh.id
 JOIN gfx_sessions gs ON gh.session_id = gs.session_id
+
+UNION ALL
+
+SELECT
+    'cuesheet' AS source,
+    cs.id,
+    cs.session_id AS event_id,
+    NULL AS player_id,
+    (pd.value->>'player_name')::TEXT AS player_name,
+    (pd.value->>'nationality')::TEXT AS country_code,
+    (pd.value->>'chipcount')::BIGINT AS chip_count,
+    (pd.value->>'rank')::INTEGER AS rank,
+    (pd.value->>'table_no')::INTEGER AS table_num,
+    (pd.value->>'seat_no')::INTEGER AS seat_num,
+    cs.snapshot_time AS recorded_at,
+    'cuesheet' AS data_source
+
+FROM chip_snapshots cs
+CROSS JOIN LATERAL jsonb_array_elements(cs.players_data) AS pd(value)
 
 ORDER BY recorded_at DESC;
 ```
@@ -1493,7 +1532,11 @@ INSERT INTO sync_status (source, entity_type, status, sync_interval_minutes) VAL
 ('wsop', 'events', 'pending', 30),
 ('wsop', 'players', 'pending', 30),
 ('wsop', 'chip_counts', 'pending', 15),
-('manual', 'players', 'pending', 120);
+('manual', 'players', 'pending', 120),
+('cuesheet', 'broadcast_sessions', 'pending', 60),
+('cuesheet', 'cue_sheets', 'pending', 60),
+('cuesheet', 'cue_items', 'pending', 30),
+('cuesheet', 'chip_snapshots', 'pending', 15);
 ```
 
 ---
