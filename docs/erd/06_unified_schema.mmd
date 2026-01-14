@@ -1,0 +1,165 @@
+erDiagram
+    %% GFX Schema
+    gfx_sessions ||--o{ gfx_hands : contains
+    gfx_hands ||--o{ gfx_hand_players : has
+    gfx_hands ||--o{ gfx_events : has
+    gfx_players ||--o{ gfx_hand_players : plays
+
+    %% WSOP Schema
+    wsop_events ||--o{ wsop_event_players : has
+    wsop_events ||--o{ wsop_chip_counts : tracks
+    wsop_players ||--o{ wsop_event_players : participates
+    wsop_players ||--o{ wsop_chip_counts : has
+
+    %% Manual Schema
+    manual_players ||--o{ profile_images : has
+    manual_players ||--o{ player_overrides : has
+
+    %% Player Linking - Cross Schema
+    player_link_mapping }o--|| manual_players : links
+    player_link_mapping }o--|| wsop_players : links
+    player_link_mapping }o--|| gfx_players : links
+
+    %% Cuesheet Schema
+    broadcast_sessions ||--o{ cue_sheets : has
+    cue_sheets ||--o{ cue_items : contains
+    broadcast_sessions ||--o{ chip_snapshots : has
+
+    %% Orchestration Schema
+    job_queue ||--o{ render_queue : triggers
+    job_queue ||--o{ notifications : creates
+    sync_status ||--o{ sync_history : records
+
+    %% Unified Views - Virtual
+    unified_players }o--|| manual_players : aggregates
+    unified_players }o--|| wsop_players : aggregates
+    unified_players }o--|| gfx_players : aggregates
+
+    gfx_sessions {
+        uuid id PK
+        bigint session_id UK
+        text file_hash UK
+        table_type table_type
+    }
+
+    gfx_hands {
+        uuid id PK
+        bigint session_id FK
+        integer hand_num
+    }
+
+    gfx_hand_players {
+        uuid id PK
+        uuid hand_id FK
+        uuid player_id FK
+    }
+
+    gfx_events {
+        uuid id PK
+        uuid hand_id FK
+    }
+
+    gfx_players {
+        uuid id PK
+        text player_hash UK
+        text name
+    }
+
+    wsop_events {
+        uuid id PK
+        text event_id UK
+        text event_name
+    }
+
+    wsop_players {
+        uuid id PK
+        text wsop_player_id UK
+        text name
+    }
+
+    wsop_event_players {
+        uuid id PK
+        uuid event_id FK
+        uuid player_id FK
+    }
+
+    wsop_chip_counts {
+        uuid id PK
+        uuid event_id FK
+        uuid player_id FK
+    }
+
+    manual_players {
+        uuid id PK
+        text player_code UK
+        text name
+    }
+
+    profile_images {
+        uuid id PK
+        uuid player_id FK
+    }
+
+    player_overrides {
+        uuid id PK
+        uuid player_id FK
+    }
+
+    player_link_mapping {
+        uuid id PK
+        uuid manual_player_id FK
+        uuid wsop_player_id FK
+        uuid gfx_player_id FK
+        numeric match_confidence
+    }
+
+    broadcast_sessions {
+        uuid id PK
+        text session_code UK
+    }
+
+    cue_sheets {
+        uuid id PK
+        uuid session_id FK
+    }
+
+    cue_items {
+        uuid id PK
+        uuid sheet_id FK
+    }
+
+    chip_snapshots {
+        uuid id PK
+        uuid session_id FK
+    }
+
+    job_queue {
+        uuid id PK
+        orch_job_type job_type
+    }
+
+    render_queue {
+        uuid id PK
+        uuid job_id FK
+    }
+
+    notifications {
+        uuid id PK
+        uuid job_id FK
+    }
+
+    sync_status {
+        uuid id PK
+        orch_data_source source
+    }
+
+    sync_history {
+        uuid id PK
+        uuid sync_status_id FK
+    }
+
+    unified_players {
+        text source
+        uuid source_id
+        text name
+    }

@@ -1,0 +1,71 @@
+erDiagram
+    wsop_events ||--o{ wsop_event_players : "event_id"
+    wsop_events ||--o{ wsop_chip_counts : "event_id"
+    wsop_events ||--o{ wsop_standings : "event_id"
+    wsop_events ||--o{ wsop_import_logs : "event_id"
+    wsop_players ||--o{ wsop_event_players : "player_id"
+    wsop_players ||--o{ wsop_chip_counts : "player_id"
+
+    wsop_events {
+        uuid id PK
+        text event_id UK
+        text event_name
+        wsop_event_type event_type
+        date start_date
+        bigint buy_in
+        bigint prize_pool
+        jsonb blind_structure
+        jsonb payouts
+        wsop_event_status status
+    }
+
+    wsop_players {
+        uuid id PK
+        text wsop_player_id UK
+        text name
+        text name_normalized
+        varchar country_code
+        integer wsop_bracelets
+        bigint lifetime_earnings
+        jsonb additional_info
+    }
+
+    wsop_event_players {
+        uuid id PK
+        uuid event_id FK
+        uuid player_id FK
+        bigint current_chips
+        integer rank
+        wsop_player_status status
+        bigint prize_won
+    }
+
+    wsop_chip_counts {
+        uuid id PK
+        uuid event_id FK
+        uuid player_id FK
+        bigint chip_count
+        bigint chip_change
+        integer rank
+        numeric stack_in_bbs
+        timestamptz recorded_at
+        wsop_chip_source source
+    }
+
+    wsop_standings {
+        uuid id PK
+        uuid event_id FK
+        timestamptz snapshot_at
+        integer players_remaining
+        jsonb standings
+        uuid chip_leader_player_id FK
+    }
+
+    wsop_import_logs {
+        uuid id PK
+        text file_hash
+        wsop_import_type file_type
+        uuid event_id FK
+        wsop_import_status status
+        integer records_created
+    }

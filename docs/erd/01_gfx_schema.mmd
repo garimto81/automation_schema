@@ -1,0 +1,75 @@
+erDiagram
+    gfx_sessions ||--o{ gfx_hands : "session_id"
+    gfx_sessions ||--o{ sync_log : "session_id"
+    gfx_hands ||--o{ gfx_hand_players : "hand_id"
+    gfx_hands ||--o{ gfx_events : "hand_id"
+    gfx_hands ||--o| hand_grades : "hand_id"
+    gfx_players ||--o{ gfx_hand_players : "player_id"
+
+    gfx_sessions {
+        uuid id PK
+        bigint session_id UK
+        text file_hash UK
+        table_type table_type
+        text event_title
+        jsonb raw_json
+        sync_status sync_status
+        integer hand_count
+    }
+
+    gfx_hands {
+        uuid id PK
+        bigint session_id FK
+        integer hand_num
+        game_variant game_variant
+        bet_structure bet_structure
+        jsonb blinds
+        text board_cards
+        integer pot_size
+        integer duration_seconds
+    }
+
+    gfx_hand_players {
+        uuid id PK
+        uuid hand_id FK
+        uuid player_id FK
+        integer seat_num
+        text hole_cards
+        integer start_stack_amt
+        integer end_stack_amt
+        boolean is_winner
+    }
+
+    gfx_events {
+        uuid id PK
+        uuid hand_id FK
+        integer event_order
+        event_type event_type
+        integer player_num
+        integer bet_amt
+        text board_cards
+    }
+
+    gfx_players {
+        uuid id PK
+        text player_hash UK
+        text name
+        text long_name
+        integer total_hands_played
+    }
+
+    hand_grades {
+        uuid id PK
+        uuid hand_id FK
+        char grade
+        boolean broadcast_eligible
+        integer conditions_met
+    }
+
+    sync_log {
+        uuid id PK
+        text file_hash
+        text operation
+        text status
+        uuid session_id FK
+    }

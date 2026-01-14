@@ -1,0 +1,95 @@
+erDiagram
+    job_queue ||--o{ render_queue : "job_id"
+    job_queue ||--o{ notifications : "job_id"
+    job_queue ||--o{ job_queue : "parent_job_id"
+    sync_status ||--o{ sync_history : "sync_status_id"
+
+    job_queue {
+        uuid id PK
+        orch_job_type job_type
+        text job_name
+        integer priority
+        jsonb payload
+        orch_job_status status
+        integer progress
+        integer retry_count
+        text worker_id
+        timestamptz locked_at
+        uuid parent_job_id FK
+        uuid_array depends_on
+    }
+
+    render_queue {
+        uuid id PK
+        uuid job_id FK
+        orch_render_type render_type
+        text aep_project
+        text aep_comp_name
+        jsonb gfx_data
+        text data_hash
+        orch_render_status status
+        integer progress
+        integer current_frame
+        boolean cache_hit
+    }
+
+    sync_status {
+        uuid id PK
+        orch_data_source source
+        text entity_type
+        uuid entity_id
+        orch_sync_status status
+        timestamptz last_synced_at
+        integer sync_interval_minutes
+        integer consecutive_failures
+        timestamptz next_sync_at
+    }
+
+    sync_history {
+        uuid id PK
+        uuid sync_status_id FK
+        uuid job_id FK
+        orch_sync_operation operation
+        integer records_processed
+        integer records_created
+        integer records_failed
+        integer duration_ms
+    }
+
+    notifications {
+        uuid id PK
+        orch_notification_type type
+        orch_notification_level level
+        text title
+        text message
+        uuid job_id FK
+        text target_user
+        boolean read
+    }
+
+    system_config {
+        text key PK
+        jsonb value
+        text category
+        boolean is_sensitive
+        boolean is_readonly
+    }
+
+    api_keys {
+        uuid id PK
+        text key_hash UK
+        text key_prefix
+        jsonb permissions
+        integer rate_limit_per_minute
+        boolean is_active
+    }
+
+    activity_log {
+        uuid id PK
+        text action
+        text actor
+        orch_actor_type actor_type
+        text entity_type
+        uuid entity_id
+        jsonb changes
+    }

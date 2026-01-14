@@ -1,0 +1,64 @@
+erDiagram
+    broadcast_sessions ||--o{ cue_sheets : "session_id"
+    broadcast_sessions ||--o{ chip_snapshots : "session_id"
+    cue_sheets ||--o{ cue_items : "sheet_id"
+    cue_sheets ||--o{ cue_triggers : "sheet_id"
+    cue_templates ||--o{ cue_items : "template_id"
+
+    broadcast_sessions {
+        uuid id PK
+        text session_code UK
+        text event_name
+        date broadcast_date
+        cue_broadcast_status status
+        integer total_cue_items
+        integer completed_items
+    }
+
+    cue_sheets {
+        uuid id PK
+        uuid session_id FK
+        text sheet_name
+        cue_sheet_type sheet_type
+        integer sort_order
+        integer item_count
+    }
+
+    cue_items {
+        uuid id PK
+        uuid sheet_id FK
+        uuid template_id FK
+        cue_item_type item_type
+        integer sort_order
+        text content_type
+        integer hand_number
+        text hand_rank
+        text special_info
+        cue_render_status status
+    }
+
+    cue_templates {
+        uuid id PK
+        text template_name UK
+        cue_item_type item_type
+        jsonb default_settings
+        boolean is_active
+    }
+
+    cue_triggers {
+        uuid id PK
+        uuid sheet_id FK
+        uuid item_id FK
+        text trigger_type
+        timestamptz triggered_at
+        text triggered_by
+    }
+
+    chip_snapshots {
+        uuid id PK
+        uuid session_id FK
+        timestamptz snapshot_time
+        text snapshot_source
+        jsonb players_data
+        integer player_count
+    }
