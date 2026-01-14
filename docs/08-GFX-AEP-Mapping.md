@@ -68,7 +68,7 @@ GFX JSON DB에 저장된 포커 게임 데이터를 After Effects 컴포지션�
 | `chips 1~16` | 16 | `gfx_hand_players` | `end_stack_amt` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
 | `rank 1~16` | 16 | (계산) | - | **계산**: `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)`. rank = slot_index |
 | `bbs 1~16` | 16 | (계산) | - | **계산**: `end_stack_amt / big_blind_amt`. **변환**: `format_bbs()` (소수점 1자리) |
-| `country_flag 1~16` | 16 | `unified_players` | `country_code` | **우선순위**: Manual > WSOP+ > GFX. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
+| `country_flag 1~16` | 16 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
 
 #### 데이터 추출 쿼리
 
@@ -78,11 +78,12 @@ SELECT
     hp.player_name AS name,
     format_chips(hp.end_stack_amt) AS chips,
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs,
-    COALESCE(up.country_code, 'XX') AS country_code,
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag_path
+    -- country_code는 GFX JSON에 없음 → Manual DB에서 조회
+    COALESCE(mp.country_code, 'XX') AS country_code,
+    get_flag_path(COALESCE(mp.country_code, 'XX')) AS flag_path
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN unified_players up ON hp.player_name = up.name
+LEFT JOIN manual_players mp ON LOWER(hp.player_name) = LOWER(mp.name)
 WHERE hp.sitting_out = FALSE
   AND h.session_id = :session_id
   AND h.hand_num = :hand_num
@@ -96,15 +97,17 @@ LIMIT 16;
 
 **대상 컴포지션**: `Feature Table Leaderboard MAIN`, `Feature Table Leaderboard SUB`
 
+> **Note**: AEP 분석 결과 실제 슬롯 수는 **9개**입니다. (CyprusDesign_analysis.json 기준)
+
 #### 필드 매핑 테이블
 
 | AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
 |---------------|--------|---------------|---------|---------------|
-| `name 1~30` | 30 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **추출**: JSONB 배열 순회 |
-| `chips 1~30` | 30 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
-| `rank 1~30` | 30 | `wsop_standings` | `standings->>'rank'` | **추출**: JSONB `rank` 필드 직접 사용 (WSOP+ API 제공 순위) |
-| `bbs 1~30` | 30 | `wsop_standings` | `standings->>'stack_in_bbs'` | **추출**: JSONB 필드. **변환**: `format_bbs()` (소수점 1자리) |
-| `country_flag 1~30` | 30 | `wsop_standings` | `standings->>'country_code'` | **추출**: JSONB 필드. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
+| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **추출**: JSONB 배열 순회 |
+| `Chips 1~9` | 9 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
+| `Date 1~9` | 9 | `wsop_standings` | `standings->>'rank'` | **추출**: JSONB `rank` 필드 직접 사용 (WSOP+ API 제공 순위) |
+| `BBs 1~9` | 9 | `wsop_standings` | `standings->>'stack_in_bbs'` | **추출**: JSONB 필드. **변환**: `format_bbs()` (소수점 1자리) |
+| `Flag 1~9` | 9 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
 
 #### 데이터 추출 쿼리
 
@@ -117,10 +120,12 @@ SELECT
         (player->>'chip_count')::BIGINT,
         (SELECT (blind_structure->0->>'bb')::BIGINT FROM wsop_events WHERE id = s.event_id)
     ) AS bbs,
-    COALESCE(player->>'country_code', 'XX') AS country_code,
-    get_flag_path(COALESCE(player->>'country_code', 'XX')) AS flag_path
+    -- country_code는 GFX JSON에 없음 → Manual DB에서 조회
+    COALESCE(mp.country_code, 'XX') AS country_code,
+    get_flag_path(COALESCE(mp.country_code, 'XX')) AS flag_path
 FROM wsop_standings s
 CROSS JOIN LATERAL jsonb_array_elements(s.standings) AS player
+LEFT JOIN manual_players mp ON LOWER(player->>'player_name') = LOWER(mp.name)
 WHERE s.event_id = :event_id
   AND s.id = (
       SELECT id FROM wsop_standings
@@ -129,7 +134,7 @@ WHERE s.event_id = :event_id
       LIMIT 1
   )
 ORDER BY (player->>'rank')::INTEGER
-LIMIT 30;
+LIMIT 9;
 ```
 
 ---
@@ -715,15 +720,16 @@ WHERE NOT EXISTS (
 | **제외 조건** | `sitting_out = TRUE` |
 | **최대 슬롯** | 16 |
 
-#### Leaderboard (name 1~30)
+#### Leaderboard (Name 1~9)
 
 | 항목 | 값 |
 |------|-----|
 | **정렬 기준** | WSOP+ API `rank` 필드 오름차순 |
 | **slot 1** | 전체 1위 |
-| **slot 30** | 전체 30위 |
+| **slot 9** | 전체 9위 |
 | **데이터 소스** | `wsop_standings.standings` JSONB |
-| **최대 슬롯** | 30 |
+| **최대 슬롯** | 9 |
+| **참고** | AEP 분석 결과 기준 (CyprusDesign_analysis.json) |
 
 #### Payout (rank 1~24)
 
@@ -804,8 +810,8 @@ CREATE OR REPLACE FUNCTION get_flag_path(p_country_code VARCHAR(10)) ...;
 |----------|----------|---------|--------|
 | _MAIN Mini Chip Count | chip_display | name, chips, rank, bbs, flag | 16 |
 | _SUB_Mini Chip Count | chip_display | name, chips, rank, bbs, flag | 8 |
-| Feature Table Leaderboard MAIN | leaderboard | name, chips, rank, bbs, flag | 30 |
-| Feature Table Leaderboard SUB | leaderboard | name, chips, rank, bbs, flag | 30 |
+| Feature Table Leaderboard MAIN | leaderboard | Name, Chips, Date, BBs, Flag | 9 |
+| Feature Table Leaderboard SUB | leaderboard | Name, Chips, Date, BBs, Flag | 9 |
 | Payouts | payout | rank, prize, percentage | 24 |
 | NAME | player_info | name, country, bracelets, earnings | 1 |
 | Elimination | elimination | name, rank, prize, flag | 1 |
