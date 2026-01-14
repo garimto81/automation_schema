@@ -62,13 +62,13 @@ GFX JSON DB에 저장된 포커 게임 데이터를 After Effects 컴포지션�
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 변환 로직 |
-|---------------|--------|---------------|---------|----------|
-| `name 1~16` | 16 | `gfx_hand_players` | `player_name` | 직접 매핑 |
-| `chips 1~16` | 16 | `gfx_hand_players` | `end_stack_amt` | `format_chips()` |
-| `rank 1~16` | 16 | (계산) | - | `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)` |
-| `bbs 1~16` | 16 | (계산) | `end_stack_amt / bb` | `format_bbs()` |
-| `country_flag 1~16` | 16 | `unified_players` | `country_code` | ISO → Flag 경로 |
+| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|--------|---------------|---------|---------------|
+| `name 1~16` | 16 | `gfx_hand_players` | `player_name` | **정렬**: `end_stack_amt DESC`. slot 1 = 칩 리더. `sitting_out = TRUE` 제외 |
+| `chips 1~16` | 16 | `gfx_hand_players` | `end_stack_amt` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
+| `rank 1~16` | 16 | (계산) | - | **계산**: `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)`. rank = slot_index |
+| `bbs 1~16` | 16 | (계산) | - | **계산**: `end_stack_amt / big_blind_amt`. **변환**: `format_bbs()` (소수점 1자리) |
+| `country_flag 1~16` | 16 | `unified_players` | `country_code` | **우선순위**: Manual > WSOP+ > GFX. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
 
 #### 데이터 추출 쿼리
 
@@ -98,13 +98,13 @@ LIMIT 16;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 변환 로직 |
-|---------------|--------|---------------|---------|----------|
-| `name 1~30` | 30 | `wsop_standings` | `standings->>'player_name'` | JSONB 추출 |
-| `chips 1~30` | 30 | `wsop_standings` | `standings->>'chip_count'` | `format_chips()` |
-| `rank 1~30` | 30 | `wsop_standings` | `standings->>'rank'` | 직접 매핑 |
-| `bbs 1~30` | 30 | `wsop_standings` | `standings->>'stack_in_bbs'` | `format_bbs()` |
-| `country_flag 1~30` | 30 | `wsop_standings` | `standings->>'country_code'` | ISO → Flag 경로 |
+| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|--------|---------------|---------|---------------|
+| `name 1~30` | 30 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **추출**: JSONB 배열 순회 |
+| `chips 1~30` | 30 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
+| `rank 1~30` | 30 | `wsop_standings` | `standings->>'rank'` | **추출**: JSONB `rank` 필드 직접 사용 (WSOP+ API 제공 순위) |
+| `bbs 1~30` | 30 | `wsop_standings` | `standings->>'stack_in_bbs'` | **추출**: JSONB 필드. **변환**: `format_bbs()` (소수점 1자리) |
+| `country_flag 1~30` | 30 | `wsop_standings` | `standings->>'country_code'` | **추출**: JSONB 필드. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
 
 #### 데이터 추출 쿼리
 
@@ -140,11 +140,11 @@ LIMIT 30;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 변환 로직 |
-|---------------|--------|---------------|---------|----------|
-| `rank 1~24` | 24 | `wsop_events` | `payouts[n].place` | 직접 매핑 |
-| `prize 1~24` | 24 | `wsop_events` | `payouts[n].amount` | `format_currency()` |
-| `percentage 1~24` | 24 | `wsop_events` | `payouts[n].percentage` | `|| '%'` |
+| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|--------|---------------|---------|---------------|
+| `rank 1~24` | 24 | `wsop_events` | `payouts[n].place` | **정렬**: `place` 오름차순. slot 1 = 1등 상금. **추출**: JSONB 배열 순회 |
+| `prize 1~24` | 24 | `wsop_events` | `payouts[n].amount` | **정렬**: 동일. **변환**: `format_currency()` (cents → "$1,000,000") |
+| `percentage 1~24` | 24 | `wsop_events` | `payouts[n].percentage` | **정렬**: 동일. **변환**: `|| '%'` 접미사 추가 |
 
 #### 데이터 추출 쿼리
 
@@ -168,15 +168,15 @@ LIMIT 24;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 우선순위 | 변환 로직 |
-|---------------|---------------|---------|----------|----------|
-| `name` | `unified_players` | `display_name` | Manual > WSOP > GFX | 직접 매핑 |
-| `name_korean` | `manual_players` | `name_korean` | Manual only | 직접 매핑 |
-| `country` | `unified_players` | `country_name` | - | 직접 매핑 |
-| `country_flag` | `unified_players` | `country_code` | - | ISO → Flag 경로 |
-| `bracelets` | `wsop_players` | `wsop_bracelets` | - | 숫자 |
-| `earnings` | `wsop_players` | `lifetime_earnings` | - | `format_currency()` |
-| `bio` | `manual_players` | `bio` | Manual only | 직접 매핑 |
+| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|---------------|---------|---------------|
+| `name` | `unified_players` | `display_name` | **우선순위**: Manual > WSOP+ > GFX. **조회**: `player_name` ILIKE 매칭 |
+| `name_korean` | `manual_players` | `name_korean` | **소스**: Manual DB 전용. **fallback**: 빈 문자열 |
+| `country` | `unified_players` | `country_name` | **조회**: unified_players 통합 뷰. 국가명 (영문) |
+| `country_flag` | `unified_players` | `country_code` | **변환**: ISO → Flag 경로. **fallback**: 'XX' (Unknown) |
+| `bracelets` | `wsop_players` | `wsop_bracelets` | **조회**: LEFT JOIN wsop_players. **fallback**: 0 |
+| `earnings` | `wsop_players` | `lifetime_earnings` | **변환**: `format_currency()` (cents → "$1,000,000"). **fallback**: "$0" |
+| `bio` | `manual_players` | `bio` | **소스**: Manual DB 전용. **fallback**: 빈 문자열 |
 
 #### 데이터 추출 쿼리
 
@@ -206,13 +206,13 @@ LIMIT 1;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 변환 로직 |
-|---------------|---------------|---------|----------|
-| `name` | `gfx_hand_players` | `player_name` | 직접 매핑 |
-| `rank` | `gfx_hand_players` | `elimination_rank` | 직접 매핑 |
-| `prize` | `wsop_events` | `payouts[rank].amount` | `format_currency()` |
-| `country_flag` | `unified_players` | `country_code` | ISO → Flag 경로 |
-| `eliminated_by` | `wsop_event_players` | `eliminated_by_player_id` → `name` | FK 조인 |
+| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|---------------|---------|---------------|
+| `name` | `gfx_hand_players` | `player_name` | **조건**: `elimination_rank > 0`. 탈락한 플레이어 이름 |
+| `rank` | `gfx_hand_players` | `elimination_rank` | **조건**: `elimination_rank > 0`. 최종 순위 (탈락 순서 역순) |
+| `prize` | `wsop_events` | `payouts[rank].amount` | **조회**: elimination_rank와 payouts.place 매칭. **변환**: `format_currency()`. **fallback**: "$0" |
+| `country_flag` | `unified_players` | `country_code` | **우선순위**: Manual > WSOP+ > GFX. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
+| `eliminated_by` | `wsop_event_players` | `eliminated_by_player_id` | **조회**: FK → unified_players.name 조인. 탈락시킨 플레이어 이름 |
 
 #### 데이터 추출 쿼리
 
@@ -247,15 +247,15 @@ LIMIT 1;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 변환 로직 |
-|---------------|---------------|---------|----------|
-| `event_name` | `wsop_events` | `event_name` | 직접 매핑 |
-| `event_number` | `wsop_events` | `event_number` | `'Event #' || event_number` |
-| `buy_in` | `wsop_events` | `buy_in` | `format_currency()` |
-| `entries` | `wsop_events` | `total_entries` | `format_number()` |
-| `prize_pool` | `wsop_events` | `prize_pool` | `format_currency()` |
-| `players_remaining` | `wsop_standings` | `players_remaining` | 직접 매핑 |
-| `blind_level` | `wsop_events` | `blind_structure` | `format_blinds()` |
+| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
+|---------------|---------------|---------|---------------|
+| `event_name` | `wsop_events` | `event_name` | **조회**: event_id로 조회. 이벤트 전체 이름 |
+| `event_number` | `wsop_events` | `event_number` | **변환**: `'Event #' \|\| event_number` 접두사 추가 |
+| `buy_in` | `wsop_events` | `buy_in` | **변환**: `format_currency()` (cents → "$10,000") |
+| `entries` | `wsop_events` | `total_entries` | **변환**: `format_number()` (1000 → "1,000") |
+| `prize_pool` | `wsop_events` | `prize_pool` | **변환**: `format_currency()` (cents → "$10,000,000") |
+| `players_remaining` | `wsop_standings` | `players_remaining` | **조회**: 최신 snapshot. 현재 남은 플레이어 수 |
+| `blind_level` | `wsop_events` | `blind_structure` | **계산**: 현재 레벨 추출. **변환**: `format_blinds()` ("10K/20K (20K ante)") |
 
 ---
 
@@ -265,11 +265,11 @@ LIMIT 1;
 
 #### 필드 매핑 테이블
 
-| AEP Field Key | 슬롯 수 | DB 소스 | 변환 로직 |
-|---------------|--------|---------|----------|
-| `date 1~20` | 20 | `broadcast_sessions.broadcast_date` | `format_date()` |
-| `time 1~6` | 6 | `broadcast_sessions.scheduled_start` | `format_time()` |
-| `event_name 1~6` | 6 | `broadcast_sessions.event_name` | 직접 매핑 |
+| AEP Field Key | 슬롯 수 | DB 소스 | 매핑 로직 상세 |
+|---------------|--------|---------|---------------|
+| `date 1~20` | 20 | `broadcast_sessions.broadcast_date` | **정렬**: `broadcast_date ASC`. slot 1 = 가장 빠른 날짜. **변환**: `format_date()` ("Jan 14") |
+| `time 1~6` | 6 | `broadcast_sessions.scheduled_start` | **정렬**: `scheduled_start ASC`. slot 1 = 가장 이른 시간. **변환**: `format_time()` ("05:30 PM") |
+| `event_name 1~6` | 6 | `broadcast_sessions.event_name` | **정렬**: 동일. 해당 시간대의 이벤트 이름 |
 
 ---
 
@@ -700,6 +700,49 @@ WHERE NOT EXISTS (
   }
 }
 ```
+
+### 7.4 슬롯 할당 규칙
+
+각 컴포지션별 슬롯 할당 규칙 정의:
+
+#### Chip Display (name 1~16)
+
+| 항목 | 값 |
+|------|-----|
+| **정렬 기준** | `end_stack_amt DESC` (칩 스택 내림차순) |
+| **slot 1** | 가장 많은 칩 보유자 (칩 리더) |
+| **slot 16** | 16번째로 많은 칩 보유자 |
+| **제외 조건** | `sitting_out = TRUE` |
+| **최대 슬롯** | 16 |
+
+#### Leaderboard (name 1~30)
+
+| 항목 | 값 |
+|------|-----|
+| **정렬 기준** | WSOP+ API `rank` 필드 오름차순 |
+| **slot 1** | 전체 1위 |
+| **slot 30** | 전체 30위 |
+| **데이터 소스** | `wsop_standings.standings` JSONB |
+| **최대 슬롯** | 30 |
+
+#### Payout (rank 1~24)
+
+| 항목 | 값 |
+|------|-----|
+| **정렬 기준** | `place ASC` (순위 오름차순) |
+| **slot 1** | 1등 상금 |
+| **slot 24** | 24등 상금 |
+| **데이터 소스** | `wsop_events.payouts[]` JSONB |
+| **최대 슬롯** | 24 |
+
+#### Schedule (date 1~20, time 1~6)
+
+| 항목 | 값 |
+|------|-----|
+| **정렬 기준** | `broadcast_date ASC`, `scheduled_start ASC` |
+| **slot 1** | 가장 빠른 날짜/시간 |
+| **데이터 소스** | `broadcast_sessions` |
+| **최대 슬롯** | date: 20, time: 6 |
 
 ---
 
