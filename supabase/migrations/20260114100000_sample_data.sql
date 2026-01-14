@@ -197,20 +197,20 @@ ON CONFLICT (hand_id, seat_num) DO NOTHING;
 
 INSERT INTO manual_players (
     id, player_code, name, name_korean, name_display,
-    country_code, country_name, bio, is_verified, is_active
+    country_code, country_name, bio, is_verified, is_active, created_by
 ) VALUES
     (gen_random_uuid(), 'MP-001', 'Jean-Robert Bellande', '장-로버트 벨란드', 'Jean-Robert Bellande', 'US', 'United States',
      'Professional poker player and entrepreneur. Known for his aggressive playing style and TV appearances.',
-     TRUE, TRUE),
+     TRUE, TRUE, 'system'),
     (gen_random_uuid(), 'MP-002', 'Alexandros Kolonias', '알렉산드로스 콜로니아스', 'Alexandros Kolonias', 'GR', 'Greece',
      'WSOP bracelet winner. One of the most successful Greek poker players.',
-     TRUE, TRUE),
+     TRUE, TRUE, 'system'),
     (gen_random_uuid(), 'MP-003', 'Nikita Kuznetsov', '니키타 쿠즈네초프', 'Nikita Kuznetsov', 'RU', 'Russia',
      'High stakes tournament player.',
-     FALSE, TRUE),
+     FALSE, TRUE, 'system'),
     (gen_random_uuid(), 'MP-004', 'Sebastian Pauli', '세바스티안 파울리', 'Sebastian Pauli', 'DE', 'Germany',
      'German poker pro specializing in MTTs.',
-     FALSE, TRUE)
+     FALSE, TRUE, 'system')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================
@@ -227,13 +227,13 @@ INSERT INTO wsop_events (
         'WSOP-CYPRUS-2025-ME',
         'WSOP Super Circuit Cyprus - Main Event',
         1,
-        'nlh_main_event',
+        'MAIN_EVENT',
         '2025-10-15',
         '2025-10-21',
         550000,  -- $5,500 in cents
         1500000000,  -- $15,000,000 prize pool in cents
         2750,
-        'in_progress',
+        'running',
         'Merit Royal Diamond Hotel, Cyprus'
     ),
     (
@@ -241,7 +241,7 @@ INSERT INTO wsop_events (
         'WSOP-CYPRUS-2025-12',
         'Event #12: $5,000 MEGA MYSTERY BOUNTY RAFFLE',
         12,
-        'nlh_bounty',
+        'MYSTERY_BOUNTY',
         '2025-10-18',
         '2025-10-19',
         500000,  -- $5,000
@@ -257,7 +257,7 @@ ON CONFLICT DO NOTHING;
 -- ============================================================================
 
 INSERT INTO wsop_standings (
-    id, event_id, players_remaining, average_stack, snapshot_at, standings
+    id, event_id, players_remaining, avg_stack, snapshot_at, standings
 ) VALUES
     (
         gen_random_uuid(),
@@ -287,99 +287,24 @@ INSERT INTO wsop_standings (
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================
--- 8. AEP Compositions - After Effects 컴포지션 메타데이터
+-- 8-10. AEP 관련 테이블 (스키마에 미정의 - 생략)
+-- aep_compositions, aep_field_keys, aep_media_sources는
+-- 별도 스키마 추가 시 활성화
 -- ============================================================================
-
-INSERT INTO aep_compositions (
-    id, aep_project_id, comp_name, width, height, duration_seconds,
-    frame_rate, layer_count, text_layer_count, category, is_renderable
-) VALUES
-    -- 메인 렌더링 대상 컴포지션
-    (gen_random_uuid(), NULL, 'Feature Table Leaderboard MAIN', 1920, 1080, 60, 30, 80, 42, 'leaderboard', TRUE),
-    (gen_random_uuid(), NULL, 'Feature Table Leaderboard SUB', 1920, 1080, 60, 30, 80, 41, 'leaderboard', TRUE),
-    (gen_random_uuid(), NULL, 'Broadcast Schedule', 1920, 1080, 60, 30, 46, 23, 'schedule', TRUE),
-    (gen_random_uuid(), NULL, 'Commentator', 1920, 1080, 30, 30, 25, 8, 'staff', TRUE),
-    (gen_random_uuid(), NULL, 'Event info', 1920, 1080, 60, 30, 23, 10, 'event_info', TRUE),
-    (gen_random_uuid(), NULL, 'Payouts', 1920, 1080, 60, 30, 69, 31, 'payout', TRUE),
-    (gen_random_uuid(), NULL, 'Block Transition INFO', 1920, 1080, 30, 30, 23, 11, 'transition', TRUE),
-
-    -- 보조 컴포지션
-    (gen_random_uuid(), NULL, '_MAIN Mini Chip Count', 1920, 1080, 10, 30, 32, 16, 'chip_display', TRUE),
-    (gen_random_uuid(), NULL, '_SUB_Mini Chip Count', 1920, 1080, 10, 30, 16, 8, 'chip_display', TRUE),
-    (gen_random_uuid(), NULL, 'NAME', 1920, 1080, 10, 30, 8, 4, 'player_info', TRUE),
-    (gen_random_uuid(), NULL, 'Elimination', 1920, 1080, 15, 30, 12, 6, 'elimination', TRUE),
-    (gen_random_uuid(), NULL, 'At Risk of Elimination', 1920, 1080, 10, 30, 10, 4, 'elimination', TRUE)
-ON CONFLICT DO NOTHING;
-
--- ============================================================================
--- 9. AEP Field Keys - 텍스트 레이어 패턴
--- ============================================================================
-
-INSERT INTO aep_field_keys (
-    id, field_key, pattern_type, max_slot_index, example_values
-) VALUES
-    -- 슬롯 기반 필드
-    (gen_random_uuid(), 'name', 'slot', 30, ARRAY['Phil Ivey', 'Daniel Negreanu', 'Ipekoglu']),
-    (gen_random_uuid(), 'chips', 'slot', 19, ARRAY['1,500,000', '750,000', '12,430,000']),
-    (gen_random_uuid(), 'rank', 'slot', 25, ARRAY['1', '2', '3']),
-    (gen_random_uuid(), 'bbs', 'slot', 14, ARRAY['75.0', '37.5', '124.3']),
-    (gen_random_uuid(), 'prize', 'slot', 24, ARRAY['$1,000,000', '$500,000', '$250,000']),
-    (gen_random_uuid(), 'date', 'slot', 20, ARRAY['Oct 16', 'Oct 17', 'Oct 18']),
-    (gen_random_uuid(), 'time', 'slot', 6, ARRAY['05:10 PM UTC+3', '02:30 PM UTC+3']),
-    (gen_random_uuid(), 'event_name', 'slot', 6, ARRAY['MAIN EVENT DAY 1A', 'MAIN EVENT DAY 2']),
-
-    -- 단일 필드
-    (gen_random_uuid(), 'event_title', 'single', 1, ARRAY['WSOP Super Circuit Cyprus']),
-    (gen_random_uuid(), 'buy_in', 'single', 1, ARRAY['$5,500', '$10,000']),
-    (gen_random_uuid(), 'total_entries', 'single', 1, ARRAY['2,750', '1,600']),
-    (gen_random_uuid(), 'prize_pool', 'single', 1, ARRAY['$15,000,000', '$8,000,000'])
-ON CONFLICT DO NOTHING;
-
--- ============================================================================
--- 10. AEP Media Sources - 국기 이미지 매핑 (주요 국가)
--- ============================================================================
-
-INSERT INTO aep_media_sources (
-    id, file_path, category, country_code, country_name
-) VALUES
-    -- 주요 국가 국기
-    (gen_random_uuid(), 'Flag/United States.png', 'Flag', 'US', 'United States'),
-    (gen_random_uuid(), 'Flag/Canada.png', 'Flag', 'CA', 'Canada'),
-    (gen_random_uuid(), 'Flag/United Kingdom.png', 'Flag', 'GB', 'United Kingdom'),
-    (gen_random_uuid(), 'Flag/Germany.png', 'Flag', 'DE', 'Germany'),
-    (gen_random_uuid(), 'Flag/France.png', 'Flag', 'FR', 'France'),
-    (gen_random_uuid(), 'Flag/Italy.png', 'Flag', 'IT', 'Italy'),
-    (gen_random_uuid(), 'Flag/Spain.png', 'Flag', 'ES', 'Spain'),
-    (gen_random_uuid(), 'Flag/Russia.png', 'Flag', 'RU', 'Russia'),
-    (gen_random_uuid(), 'Flag/China.png', 'Flag', 'CN', 'China'),
-    (gen_random_uuid(), 'Flag/Japan.png', 'Flag', 'JP', 'Japan'),
-    (gen_random_uuid(), 'Flag/Korea.png', 'Flag', 'KR', 'Korea'),
-    (gen_random_uuid(), 'Flag/Brazil.png', 'Flag', 'BR', 'Brazil'),
-    (gen_random_uuid(), 'Flag/Australia.png', 'Flag', 'AU', 'Australia'),
-    (gen_random_uuid(), 'Flag/Greece.png', 'Flag', 'GR', 'Greece'),
-    (gen_random_uuid(), 'Flag/Turkey.png', 'Flag', 'TR', 'Turkey'),
-    (gen_random_uuid(), 'Flag/Poland.png', 'Flag', 'PL', 'Poland'),
-    (gen_random_uuid(), 'Flag/Latvia.png', 'Flag', 'LV', 'Latvia'),
-    (gen_random_uuid(), 'Flag/Lithuania.png', 'Flag', 'LT', 'Lithuania'),
-    (gen_random_uuid(), 'Flag/Lebanon.png', 'Flag', 'LB', 'Lebanon'),
-    (gen_random_uuid(), 'Flag/Iran.png', 'Flag', 'IR', 'Iran'),
-    (gen_random_uuid(), 'Flag/Bulgaria.png', 'Flag', 'BG', 'Bulgaria'),
-    (gen_random_uuid(), 'Flag/Unknown.png', 'Flag', 'XX', 'Unknown')
-ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- 11. Broadcast Sessions - 방송 스케줄 (Schedule 컴포지션용)
 -- ============================================================================
 
 INSERT INTO broadcast_sessions (
-    id, session_code, event_name, broadcast_date, scheduled_start, status
+    id, session_code, event_name, broadcast_date, scheduled_start, status, created_by
 ) VALUES
-    (gen_random_uuid(), 'BC-2025-1016', 'MAIN EVENT DAY 1A', '2025-10-16', '17:10:00', 'completed'),
-    (gen_random_uuid(), 'BC-2025-1017', 'MAIN EVENT DAY 1C', '2025-10-17', '17:00:00', 'completed'),
-    (gen_random_uuid(), 'BC-2025-1018', 'MAIN EVENT DAY 2', '2025-10-18', '17:30:00', 'completed'),
-    (gen_random_uuid(), 'BC-2025-1019', 'MAIN EVENT DAY 3', '2025-10-19', '14:30:00', 'in_progress'),
-    (gen_random_uuid(), 'BC-2025-1020', 'MAIN EVENT DAY 4', '2025-10-20', '14:00:00', 'scheduled'),
-    (gen_random_uuid(), 'BC-2025-1021', 'MAIN EVENT FINAL DAY', '2025-10-21', '13:30:00', 'scheduled')
+    (gen_random_uuid(), 'BC-2025-1016', 'MAIN EVENT DAY 1A', '2025-10-16', '2025-10-16T17:10:00+03:00', 'completed', 'system'),
+    (gen_random_uuid(), 'BC-2025-1017', 'MAIN EVENT DAY 1C', '2025-10-17', '2025-10-17T17:00:00+03:00', 'completed', 'system'),
+    (gen_random_uuid(), 'BC-2025-1018', 'MAIN EVENT DAY 2', '2025-10-18', '2025-10-18T17:30:00+03:00', 'completed', 'system'),
+    (gen_random_uuid(), 'BC-2025-1019', 'MAIN EVENT DAY 3', '2025-10-19', '2025-10-19T14:30:00+03:00', 'live', 'system'),
+    (gen_random_uuid(), 'BC-2025-1020', 'MAIN EVENT DAY 4', '2025-10-20', '2025-10-20T14:00:00+03:00', 'scheduled', 'system'),
+    (gen_random_uuid(), 'BC-2025-1021', 'MAIN EVENT FINAL DAY', '2025-10-21', '2025-10-21T13:30:00+03:00', 'scheduled', 'system')
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================
@@ -446,9 +371,6 @@ BEGIN
     RAISE NOTICE '  - manual_players: 4명';
     RAISE NOTICE '  - wsop_events: 2개';
     RAISE NOTICE '  - wsop_standings: 1개 (16명 순위)';
-    RAISE NOTICE '  - aep_compositions: 12개';
-    RAISE NOTICE '  - aep_field_keys: 12개';
-    RAISE NOTICE '  - aep_media_sources: 22개 (국기)';
     RAISE NOTICE '  - broadcast_sessions: 6개';
     RAISE NOTICE '  - render_queue: 1개';
 END $$;

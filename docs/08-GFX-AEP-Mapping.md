@@ -56,19 +56,27 @@ GFX JSON DB에 저장된 포커 게임 데이터를 After Effects 컴포지션�
 
 ## 2. 컴포지션별 필드 매핑
 
-### 2.1 Chip Display 컴포지션 (16개)
+### 2.1 Chip Display 컴포지션 (9개 슬롯)
 
-**대상 컴포지션**: `_MAIN Mini Chip Count`, `_SUB_Mini Chip Count`, `Chip Flow`, `Chip Comparison` 등
+**대상 컴포지션**: `_MAIN Mini Chip Count`, `_SUB_Mini Chip Count`
+
+> **Note**: 실제 AEP 분석 결과 슬롯 수는 **9개**입니다. (full_analysis.json 기준)
 
 #### 필드 매핑 테이블
 
 | AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
 |---------------|--------|---------------|---------|---------------|
-| `name 1~16` | 16 | `gfx_hand_players` | `player_name` | **정렬**: `end_stack_amt DESC`. slot 1 = 칩 리더. `sitting_out = TRUE` 제외 |
-| `chips 1~16` | 16 | `gfx_hand_players` | `end_stack_amt` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
-| `rank 1~16` | 16 | (계산) | - | **계산**: `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)`. rank = slot_index |
-| `bbs 1~16` | 16 | (계산) | - | **계산**: `end_stack_amt / big_blind_amt`. **변환**: `format_bbs()` (소수점 1자리) |
-| `country_flag 1~16` | 16 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
+| `name 1~9` | 9 | `gfx_hand_players` | `player_name` | **정렬**: `end_stack_amt DESC`. slot 1 = 칩 리더. `sitting_out = TRUE` 제외. **Case-Insensitive**: `name`, `Name` 모두 매칭 |
+| `chip 1~9` | 9 | `gfx_hand_players` | `end_stack_amt` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000"). **Case-Insensitive**: `chip`, `Chip` 모두 매칭 |
+| `rank 1~9` | 9 | (계산) | - | **계산**: `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)`. rank = slot_index |
+| `bbs 1~9` | 9 | (계산) | - | **계산**: `end_stack_amt / big_blind_amt`. **변환**: `format_bbs()` (소수점 1자리) |
+| `country_flag 1~9` | 9 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
+
+#### 특수 필드
+
+| AEP Layer Name | 용도 | 매핑 로직 |
+|----------------|------|-----------|
+| `AVERAGE STACK : ...` | 평균 스택 표시 | `AVG(end_stack_amt)` 계산 후 포맷팅 |
 
 #### 데이터 추출 쿼리
 
@@ -88,26 +96,27 @@ WHERE hp.sitting_out = FALSE
   AND h.session_id = :session_id
   AND h.hand_num = :hand_num
 ORDER BY hp.end_stack_amt DESC
-LIMIT 16;
+LIMIT 9;
 ```
 
 ---
 
-### 2.2 Leaderboard 컴포지션 (3개)
+### 2.2 Leaderboard 컴포지션 (9개 슬롯)
 
-**대상 컴포지션**: `Feature Table Leaderboard MAIN`, `Feature Table Leaderboard SUB`
+**대상 컴포지션**: `_Feature Table Leaderboard` (메인), `Feature Table Leaderboard MAIN`, `Feature Table Leaderboard SUB` (소스 컴프)
 
-> **Note**: AEP 분석 결과 실제 슬롯 수는 **9개**입니다. (CyprusDesign_analysis.json 기준)
+> **Note**: AEP 분석 결과 실제 슬롯 수는 **9개**입니다. (full_analysis.json 기준)
 
 #### 필드 매핑 테이블
 
 | AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
 |---------------|--------|---------------|---------|---------------|
-| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **추출**: JSONB 배열 순회 |
-| `Chips 1~9` | 9 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000") |
-| `Date 1~9` | 9 | `wsop_standings` | `standings->>'rank'` | **추출**: JSONB `rank` 필드 직접 사용 (WSOP+ API 제공 순위) |
-| `BBs 1~9` | 9 | `wsop_standings` | `standings->>'stack_in_bbs'` | **추출**: JSONB 필드. **변환**: `format_bbs()` (소수점 1자리) |
-| `Flag 1~9` | 9 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
+| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **Case-Insensitive** |
+| `Chips 1~9` | 9 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000"). **Case-Insensitive** |
+| `Date 1~9` | 9 | (계산) | - | **⚠️ 순위 번호 표시용** (1, 2, 3...). 날짜 아님. `ROW_NUMBER()` 사용 |
+| `Flag 1~9` | 8 | `manual_players` | `country_code` | **⚠️ Flag 3 누락** (1,2,4,5,6,7,8,9만 존재). **fallback**: 'XX'. **Case-Insensitive** |
+
+> **⚠️ BBs 슬롯 없음**: `bbs` 레이어는 헤더 텍스트만 존재하고 데이터 슬롯 (`BBs 1~9`)은 없습니다. BB 값은 Chips 레이어에 포함하거나 별도 처리 필요.
 
 #### 데이터 추출 쿼리
 
@@ -139,30 +148,37 @@ LIMIT 9;
 
 ---
 
-### 2.3 Payout 컴포지션 (3개)
+### 2.3 Payout 컴포지션 (9~12개 슬롯)
 
-**대상 컴포지션**: `Payouts`, `Payouts detail`
+**대상 컴포지션**: `_Mini Payout`
+
+> **Note**: 실제 AEP 분석 결과 슬롯 수는 **9개** (일부 컴포지션 12개). (full_analysis.json 기준)
 
 #### 필드 매핑 테이블
 
 | AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
 |---------------|--------|---------------|---------|---------------|
-| `rank 1~24` | 24 | `wsop_events` | `payouts[n].place` | **정렬**: `place` 오름차순. slot 1 = 1등 상금. **추출**: JSONB 배열 순회 |
-| `prize 1~24` | 24 | `wsop_events` | `payouts[n].amount` | **정렬**: 동일. **변환**: `format_currency()` (cents → "$1,000,000") |
-| `percentage 1~24` | 24 | `wsop_events` | `payouts[n].percentage` | **정렬**: 동일. **변환**: `|| '%'` 접미사 추가 |
+| `Rank 1~9` | 9 | `wsop_events` | `payouts[n].place` | **정렬**: `place` 오름차순. slot 1 = 1등 상금. **Case-Insensitive** |
+| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | 해당 순위 플레이어 이름. **Case-Insensitive** |
+| `prize 1~9` | 9 | `wsop_events` | `payouts[n].amount` | **정렬**: 동일. **변환**: `format_currency()`. **Case-Insensitive** |
+
+#### 특수 필드
+
+| AEP Layer Name | 용도 | 매핑 로직 |
+|----------------|------|-----------|
+| `Total Prize $...` | 총 상금 표시 | `wsop_events.prize_pool` 포맷팅 |
 
 #### 데이터 추출 쿼리
 
 ```sql
 SELECT
     (payout->>'place')::INTEGER AS rank,
-    format_currency((payout->>'amount')::BIGINT) AS prize,
-    (payout->>'percentage')::NUMERIC || '%' AS percentage
+    format_currency((payout->>'amount')::BIGINT) AS prize
 FROM wsop_events e
 CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
 WHERE e.id = :event_id
 ORDER BY (payout->>'place')::INTEGER
-LIMIT 24;
+LIMIT 9;
 ```
 
 ---
@@ -205,19 +221,29 @@ LIMIT 1;
 
 ---
 
-### 2.5 Elimination 컴포지션 (2개)
+### 2.5 Elimination 컴포지션 (고정 레이어)
 
-**대상 컴포지션**: `Elimination`, `Elimination_detail`
+**대상 컴포지션**: `Elimination`
 
-#### 필드 매핑 테이블
+> **⚠️ 구조 주의**: 슬롯 기반이 아닌 **고정 텍스트 레이어** 구조입니다.
 
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|---------------|---------|---------------|
-| `name` | `gfx_hand_players` | `player_name` | **조건**: `elimination_rank > 0`. 탈락한 플레이어 이름 |
-| `rank` | `gfx_hand_players` | `elimination_rank` | **조건**: `elimination_rank > 0`. 최종 순위 (탈락 순서 역순) |
-| `prize` | `wsop_events` | `payouts[rank].amount` | **조회**: elimination_rank와 payouts.place 매칭. **변환**: `format_currency()`. **fallback**: "$0" |
-| `country_flag` | `unified_players` | `country_code` | **우선순위**: Manual > WSOP+ > GFX. **fallback**: 'XX'. **변환**: ISO → Flag 경로 |
-| `eliminated_by` | `wsop_event_players` | `eliminated_by_player_id` | **조회**: FK → unified_players.name 조인. 탈락시킨 플레이어 이름 |
+#### 레이어 구조 (full_analysis.json 기준)
+
+| AEP Layer (예시) | 레이어 타입 | 매핑 데이터 |
+|------------------|------------|-------------|
+| `Turkey.png` | AVLayer (Flag) | 국가 코드 → Flag 이미지 경로 |
+| `Mehmet Dalkilic` | TextLayer | 플레이어 이름 (직접 텍스트 교체) |
+| `ELIMINATED IN 10TH PLACE ($64,600)` | TextLayer | **복합 필드**: 순위 + 상금 결합 |
+
+> **Note**: `rank`, `prize` 필드가 분리되지 않고 하나의 텍스트 레이어에 결합되어 있습니다.
+
+#### 매핑 로직
+
+| 데이터 | DB 소스 | 변환 로직 |
+|--------|---------|-----------|
+| 플레이어 이름 | `gfx_hand_players.player_name` | 직접 텍스트 교체 |
+| 국기 | `manual_players.country_code` | ISO → Flag 이미지 경로 |
+| 탈락 정보 | (계산) | `ELIMINATED IN {rank}TH PLACE (${prize})` 포맷 |
 
 #### 데이터 추출 쿼리
 
@@ -225,22 +251,27 @@ LIMIT 1;
 SELECT
     hp.player_name AS name,
     hp.elimination_rank AS rank,
-    COALESCE(
-        (SELECT format_currency((payout->>'amount')::BIGINT)
-         FROM wsop_events e
-         CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
-         WHERE e.id = :event_id
-           AND (payout->>'place')::INTEGER = hp.elimination_rank
-         LIMIT 1),
-        '$0'
-    ) AS prize,
-    COALESCE(up.country_code, 'XX') AS country_code,
+    format_currency((
+        SELECT (payout->>'amount')::BIGINT
+        FROM wsop_events e
+        CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
+        WHERE e.id = :event_id
+          AND (payout->>'place')::INTEGER = hp.elimination_rank
+        LIMIT 1
+    )) AS prize,
+    -- 탈락 정보 텍스트 생성
+    'ELIMINATED IN ' || hp.elimination_rank ||
+        CASE
+            WHEN hp.elimination_rank = 1 THEN 'ST'
+            WHEN hp.elimination_rank = 2 THEN 'ND'
+            WHEN hp.elimination_rank = 3 THEN 'RD'
+            ELSE 'TH'
+        END || ' PLACE (' || format_currency(...) || ')' AS elimination_text,
     get_flag_path(COALESCE(up.country_code, 'XX')) AS flag_path
 FROM gfx_hand_players hp
 LEFT JOIN unified_players up ON hp.player_name = up.name
 WHERE hp.hand_id = :hand_id
   AND hp.elimination_rank > 0
-ORDER BY hp.elimination_rank
 LIMIT 1;
 ```
 
@@ -710,15 +741,18 @@ WHERE NOT EXISTS (
 
 각 컴포지션별 슬롯 할당 규칙 정의:
 
-#### Chip Display (name 1~16)
+> **Note**: 모든 필드 키는 **Case-Insensitive** 매핑됩니다.
+
+#### Chip Display (name 1~9)
 
 | 항목 | 값 |
 |------|-----|
 | **정렬 기준** | `end_stack_amt DESC` (칩 스택 내림차순) |
 | **slot 1** | 가장 많은 칩 보유자 (칩 리더) |
-| **slot 16** | 16번째로 많은 칩 보유자 |
+| **slot 9** | 9번째로 많은 칩 보유자 |
 | **제외 조건** | `sitting_out = TRUE` |
-| **최대 슬롯** | 16 |
+| **최대 슬롯** | 9 |
+| **필드 매칭** | `name`, `Name` 모두 매칭 (Case-Insensitive) |
 
 #### Leaderboard (Name 1~9)
 
@@ -729,17 +763,17 @@ WHERE NOT EXISTS (
 | **slot 9** | 전체 9위 |
 | **데이터 소스** | `wsop_standings.standings` JSONB |
 | **최대 슬롯** | 9 |
-| **참고** | AEP 분석 결과 기준 (CyprusDesign_analysis.json) |
+| **참고** | Date 필드 = 순위 번호, BBs 슬롯 없음 |
 
-#### Payout (rank 1~24)
+#### Payout (Rank 1~9)
 
 | 항목 | 값 |
 |------|-----|
 | **정렬 기준** | `place ASC` (순위 오름차순) |
 | **slot 1** | 1등 상금 |
-| **slot 24** | 24등 상금 |
+| **slot 9** | 9등 상금 |
 | **데이터 소스** | `wsop_events.payouts[]` JSONB |
-| **최대 슬롯** | 24 |
+| **최대 슬롯** | 9 (일부 컴포지션 12) |
 
 #### Schedule (date 1~20, time 1~6)
 
@@ -749,6 +783,57 @@ WHERE NOT EXISTS (
 | **slot 1** | 가장 빠른 날짜/시간 |
 | **데이터 소스** | `broadcast_sessions` |
 | **최대 슬롯** | date: 20, time: 6 |
+
+---
+
+## 7.5 레이어 이름 매칭 규칙
+
+### 7.5.1 Case-Insensitive 매핑
+
+AEP 템플릿의 레이어 이름은 대소문자가 일관되지 않으므로, 매핑 로직에서 **대소문자를 무시**하고 매칭합니다.
+
+| 필드 패턴 | 매칭되는 레이어 예시 |
+|-----------|---------------------|
+| `name` | `name 1`, `Name 4`, `NAME 5` |
+| `chip` | `Chip 1`, `chip 2`, `chips 3` |
+| `rank` | `Rank 1`, `rank 2` |
+| `flag` | `Flag 1`, `flag 2` |
+
+### 7.5.2 매핑 함수 (PostgreSQL)
+
+```sql
+-- ============================================================================
+-- 함수: 레이어 이름 패턴 매칭 (Case-Insensitive)
+-- 입력: layer_name='Name 4', field_pattern='name' → 출력: TRUE
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION match_layer_pattern(
+    layer_name TEXT,
+    field_pattern TEXT
+) RETURNS BOOLEAN AS $$
+BEGIN
+    -- 대소문자 무시하고 "패턴 + 공백 + 숫자" 형태 매칭
+    RETURN LOWER(layer_name) ~ ('^' || LOWER(field_pattern) || ' \d+$');
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+```
+
+### 7.5.3 Python 매핑 로직
+
+```python
+import re
+
+def match_layer(layer_name: str, field_key: str) -> bool:
+    """레이어 이름이 필드 키 패턴과 일치하는지 확인 (Case-Insensitive)"""
+    pattern = rf'^{re.escape(field_key)}\s+\d+$'
+    return bool(re.match(pattern, layer_name, re.IGNORECASE))
+
+def extract_slot_index(layer_name: str, field_key: str) -> int | None:
+    """레이어 이름에서 슬롯 인덱스 추출"""
+    pattern = rf'^{re.escape(field_key)}\s+(\d+)$'
+    match = re.match(pattern, layer_name, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+```
 
 ---
 
@@ -806,14 +891,17 @@ CREATE OR REPLACE FUNCTION get_flag_path(p_country_code VARCHAR(10)) ...;
 
 ## Appendix: 컴포지션-필드 키 매핑 전체 목록
 
-| 컴포지션 | 카테고리 | 필드 키 | 슬롯 수 |
-|----------|----------|---------|--------|
-| _MAIN Mini Chip Count | chip_display | name, chips, rank, bbs, flag | 16 |
-| _SUB_Mini Chip Count | chip_display | name, chips, rank, bbs, flag | 8 |
-| Feature Table Leaderboard MAIN | leaderboard | Name, Chips, Date, BBs, Flag | 9 |
-| Feature Table Leaderboard SUB | leaderboard | Name, Chips, Date, BBs, Flag | 9 |
-| Payouts | payout | rank, prize, percentage | 24 |
-| NAME | player_info | name, country, bracelets, earnings | 1 |
-| Elimination | elimination | name, rank, prize, flag | 1 |
-| Event info | event_info | event_name, buy_in, entries, prize_pool | 1 |
-| Broadcast Schedule | schedule | date, time, event_name | 20 |
+> **Note**: 모든 필드 키는 **Case-Insensitive** 매핑됩니다. (`name` = `Name` = `NAME`)
+
+| 컴포지션 | 카테고리 | 필드 키 | 슬롯 수 | 비고 |
+|----------|----------|---------|--------|------|
+| _MAIN Mini Chip Count | chip_display | name, chip | 9 | `AVERAGE STACK` 특수 필드 포함 |
+| _SUB_Mini Chip Count | chip_display | name, chip | 9 | |
+| _Feature Table Leaderboard | leaderboard | (메인 컴프) | - | MAIN/SUB 서브컴프 포함 |
+| Feature Table Leaderboard MAIN | leaderboard | Name, Chips, Date, Flag | 9 | ⚠️ Date=순위번호, BBs 슬롯 없음 |
+| Feature Table Leaderboard SUB | leaderboard | Name, Chips, Date, Flag | 9 | |
+| _Mini Payout | payout | Rank, Name, prize | 9 | `Total Prize` 특수 필드 포함 |
+| NAME | player_info | name, country, bracelets, earnings | 1 | |
+| Elimination | elimination | (고정 레이어) | 1 | 복합 텍스트 레이어 구조 |
+| Event info | event_info | event_name, buy_in, entries, prize_pool | 1 | |
+| Broadcast Schedule | schedule | date, time, event_name | 20 | |
