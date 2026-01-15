@@ -32,35 +32,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_aep_media_sources_unique ON aep_media_sour
     WHERE country_code IS NOT NULL;
 
 -- ============================================================================
--- 2. gfx_aep_field_mappings 테이블: 컴포지션-필드 매핑 메타데이터
+-- 참고: gfx_aep_field_mappings 테이블은 20260114120000_gfx_aep_render_mapping.sql에서 생성됨
 -- ============================================================================
-CREATE TABLE IF NOT EXISTS gfx_aep_field_mappings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    composition_name VARCHAR(255) NOT NULL,
-    composition_category VARCHAR(50) NOT NULL,  -- chip_display, payout, event_info 등
-    target_field_key VARCHAR(100) NOT NULL,     -- AEP 텍스트 레이어 키 (예: "name", "chips")
-    slot_range_start INTEGER,                   -- 슬롯 시작 번호 (NULL이면 단일 필드)
-    slot_range_end INTEGER,                     -- 슬롯 끝 번호
-    source_table VARCHAR(100) NOT NULL,         -- 소스 테이블 (예: "gfx_hand_players")
-    source_column VARCHAR(100) NOT NULL,        -- 소스 컬럼 (예: "player_name")
-    source_join TEXT,                           -- JOIN 절 (선택)
-    transform VARCHAR(50),                       -- 변환 함수 (예: "UPPER", "format_chips")
-    slot_order_by VARCHAR(100),                  -- 슬롯 정렬 기준 (예: "end_stack_amt DESC")
-    slot_filter TEXT,                            -- 슬롯 필터 조건 (예: "sitting_out = FALSE")
-    priority INTEGER DEFAULT 100,
-    is_active BOOLEAN DEFAULT TRUE,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(composition_name, target_field_key, COALESCE(slot_range_start, 0))
-);
-
-COMMENT ON TABLE gfx_aep_field_mappings IS 'AEP 컴포지션별 필드 매핑 메타데이터';
-COMMENT ON COLUMN gfx_aep_field_mappings.composition_name IS 'AEP 컴포지션 이름 (예: "_MAIN Mini Chip Count")';
-COMMENT ON COLUMN gfx_aep_field_mappings.transform IS '적용할 변환 함수 (UPPER, format_chips, format_bbs 등)';
-
--- 인덱스
-CREATE INDEX IF NOT EXISTS idx_gfx_aep_field_mappings_comp ON gfx_aep_field_mappings(composition_name);
-CREATE INDEX IF NOT EXISTS idx_gfx_aep_field_mappings_category ON gfx_aep_field_mappings(composition_category);
 
 -- ============================================================================
 -- 3. 변환 함수들
@@ -128,22 +101,9 @@ $$ LANGUAGE SQL IMMUTABLE;
 
 COMMENT ON FUNCTION format_chips_comma(BIGINT) IS '천단위 콤마: 1500000 → "1,500,000"';
 
--- 3.6 get_flag_path: 국기 이미지 경로 조회
--- 예: get_flag_path('KR') → "Flag/Korea.png"
-CREATE OR REPLACE FUNCTION get_flag_path(p_country_code VARCHAR)
-RETURNS TEXT AS $$
-    SELECT COALESCE(
-        (SELECT file_path
-         FROM aep_media_sources
-         WHERE category = 'Flag'
-           AND UPPER(country_code) = UPPER(p_country_code)
-           AND is_active = TRUE
-         LIMIT 1),
-        'Flag/Unknown.png'
-    )
-$$ LANGUAGE SQL STABLE;
-
-COMMENT ON FUNCTION get_flag_path(VARCHAR) IS '국가 코드로 국기 이미지 경로 조회: KR → "Flag/Korea.png"';
+-- 3.6 get_flag_path: 20260114120000에서 하드코딩 버전으로 이미 생성됨
+-- 뷰에서 사용 중이므로 변경하지 않음 (v_render_chip_display, v_render_elimination 의존)
+-- aep_media_sources 테이블 기반 버전은 별도 마이그레이션에서 처리 필요
 
 -- 3.7 format_currency_cents: cents → 달러 변환
 -- 예: format_currency_cents(100000000) → "$1,000,000"
@@ -278,37 +238,28 @@ INSERT INTO aep_media_sources (category, country_code, name, file_path) VALUES
 ON CONFLICT DO NOTHING;
 
 -- ============================================================================
--- 6. 트리거: updated_at 자동 갱신
+-- 6. 트리거: updated_at 자동 갱신 (aep_media_sources만)
 -- ============================================================================
 CREATE OR REPLACE TRIGGER trigger_aep_media_sources_updated_at
     BEFORE UPDATE ON aep_media_sources
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
-CREATE OR REPLACE TRIGGER trigger_gfx_aep_field_mappings_updated_at
-    BEFORE UPDATE ON gfx_aep_field_mappings
-    FOR EACH ROW
-    EXECUTE FUNCTION update_updated_at_column();
+-- 참고: gfx_aep_field_mappings 트리거는 20260114120000에서 생성됨
 
 -- ============================================================================
--- 7. RLS 정책 (선택적)
+-- 7. RLS 정책 (aep_media_sources만)
 -- ============================================================================
 ALTER TABLE aep_media_sources ENABLE ROW LEVEL SECURITY;
-ALTER TABLE gfx_aep_field_mappings ENABLE ROW LEVEL SECURITY;
+
+-- 참고: gfx_aep_field_mappings RLS는 20260114120000에서 설정됨
 
 -- 모든 인증된 사용자에게 읽기 권한
 CREATE POLICY "Authenticated read on aep_media_sources" ON aep_media_sources
     FOR SELECT USING (auth.role() = 'authenticated');
 
-CREATE POLICY "Authenticated read on gfx_aep_field_mappings" ON gfx_aep_field_mappings
-    FOR SELECT USING (auth.role() = 'authenticated');
-
 -- Service role 전체 권한
 CREATE POLICY "Service role full access on aep_media_sources" ON aep_media_sources
-    USING (auth.role() = 'service_role')
-    WITH CHECK (auth.role() = 'service_role');
-
-CREATE POLICY "Service role full access on gfx_aep_field_mappings" ON gfx_aep_field_mappings
     USING (auth.role() = 'service_role')
     WITH CHECK (auth.role() = 'service_role');
 
