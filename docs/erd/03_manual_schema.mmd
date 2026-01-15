@@ -1,71 +1,61 @@
+%% Player Override & Profile Schema ERD
+%% Updated: 2026-01-16 (manual_players 삭제됨)
+
 erDiagram
-    manual_players ||--o{ profile_images : "player_id"
-    manual_players ||--o{ player_overrides : "player_id"
-    manual_players ||--o{ player_link_mapping : "manual_player_id"
-    manual_players ||--o{ manual_audit_log : "entity_id"
+    wsop_players ||--o{ profile_images : "wsop_player_id"
+    gfx_players ||--o{ profile_images : "gfx_player_id"
+    wsop_players ||--o{ player_overrides : "wsop_player_id"
+    gfx_players ||--o{ player_overrides : "gfx_player_id"
     wsop_players ||--o{ player_link_mapping : "wsop_player_id"
     gfx_players ||--o{ player_link_mapping : "gfx_player_id"
 
-    manual_players {
-        uuid id PK
-        text player_code UK
-        text name
-        text name_korean
-        text name_display
-        varchar country_code
-        text profile_image_url
-        text bio
-        text_array notable_wins
-        boolean is_verified
-        boolean is_active
-    }
-
     profile_images {
         uuid id PK
-        uuid player_id FK
+        uuid wsop_player_id FK "nullable"
+        uuid gfx_player_id FK "nullable"
         manual_image_type image_type
         text file_path
         text url
         manual_storage_type storage_type
         boolean is_primary
+        text notes "CHECK: wsop OR gfx required"
     }
 
     player_overrides {
         uuid id PK
-        uuid player_id FK
-        text target_source
+        uuid wsop_player_id FK "nullable"
+        uuid gfx_player_id FK "nullable"
         manual_override_field field_name
-        jsonb override_value
+        text override_value
+        text original_value
         integer priority
-        boolean is_active
+        boolean active
+        text notes "CHECK: wsop OR gfx required"
     }
 
     player_link_mapping {
         uuid id PK
-        uuid manual_player_id FK
         uuid wsop_player_id FK
         uuid gfx_player_id FK
         manual_match_method match_method
         numeric match_confidence
         boolean is_verified
-    }
-
-    manual_audit_log {
-        uuid id PK
-        text entity_type
-        uuid entity_id
-        text action
-        jsonb old_values
-        jsonb new_values
-        text changed_by
+        text notes "gfx<->wsop 교집합 연결"
     }
 
     wsop_players {
         uuid id PK
         text wsop_player_id UK
+        text name
+        text profile_image_url
     }
 
     gfx_players {
         uuid id PK
         text player_hash UK
+        text name
     }
+
+    %% 삭제된 테이블 (참고용)
+    %% manual_players - 삭제됨
+    %% manual_audit_log - 삭제됨

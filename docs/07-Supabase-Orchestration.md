@@ -2,8 +2,13 @@
 
 전체 시스템 통합 및 오케스트레이션을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 1.0.0
-**Date**: 2026-01-13
+**Version**: 2.0.0
+**Date**: 2026-01-16
+
+> ⚠️ **스키마 변경 안내 (2026-01-16)**
+> - `unified_players` 뷰: `manual_players` 제거 → gfx/wsop만 UNION
+> - `unified_chip_data` 뷰: `chip_snapshots` 제거 → wsop_chip_counts/gfx_hand_players만
+> - `sync_status` 초기 데이터: chip_snapshots 제거
 **Project**: Automation DB Schema
 
 ---
@@ -907,122 +912,43 @@ CREATE INDEX idx_activity_log_created ON activity_log(created_at DESC);
 
 ### 5.1 unified_players (통합 플레이어 뷰)
 
+> ⚠️ **변경됨 (2026-01-16)**: manual_players 삭제 → gfx/wsop만 UNION
+
 ```sql
 -- ============================================================================
 -- unified_players: 모든 소스의 플레이어 통합 뷰
--- GFX, WSOP+, Manual 데이터를 병합
+-- GFX, WSOP+ 데이터를 병합 (manual_players 삭제됨)
 -- ============================================================================
 
 CREATE OR REPLACE VIEW unified_players AS
-WITH player_sources AS (
-    -- Manual Players (최우선)
-    SELECT
-        'manual' AS source,
-        mp.id AS source_id,
-        mp.player_code AS source_code,
-        mp.name,
-        mp.name_korean,
-        COALESCE(mp.name_display, mp.name) AS display_name,
-        mp.country_code,
-        mp.country_name,
-        COALESCE(mp.profile_image_url, mp.profile_image_local) AS profile_image,
-        mp.bio,
-        mp.notable_wins,
-        mp.is_verified,
-        mp.created_at,
-        mp.updated_at,
-        1 AS priority
-    FROM manual_players mp
-    WHERE mp.is_active = TRUE
-
-    UNION ALL
-
-    -- WSOP+ Players
-    SELECT
-        'wsop' AS source,
-        wp.id AS source_id,
-        wp.wsop_player_id AS source_code,
-        wp.name,
-        NULL AS name_korean,
-        wp.name AS display_name,
-        wp.country_code,
-        wp.country_name,
-        wp.profile_image_url AS profile_image,
-        NULL AS bio,
-        NULL AS notable_wins,
-        FALSE AS is_verified,
-        wp.created_at,
-        wp.updated_at,
-        2 AS priority
-    FROM wsop_players wp
-
-    UNION ALL
-
-    -- GFX Players
-    SELECT
-        'gfx' AS source,
-        gp.id AS source_id,
-        gp.player_hash AS source_code,
-        gp.name,
-        NULL AS name_korean,
-        COALESCE(gp.long_name, gp.name) AS display_name,
-        NULL AS country_code,
-        NULL AS country_name,
-        NULL AS profile_image,
-        NULL AS bio,
-        NULL AS notable_wins,
-        FALSE AS is_verified,
-        gp.created_at,
-        gp.updated_at,
-        3 AS priority
-    FROM gfx_players gp
-),
-linked_players AS (
-    -- 연결된 플레이어 정보
-    SELECT
-        plm.manual_player_id,
-        plm.wsop_player_id,
-        plm.gfx_player_id,
-        plm.match_confidence,
-        plm.is_verified AS link_verified
-    FROM player_link_mapping plm
-)
 SELECT
-    COALESCE(ps.source_id, gen_random_uuid()) AS id,
-    ps.source AS primary_source,
-    ps.source_id,
-    ps.source_code,
-    ps.name,
-    ps.name_korean,
-    ps.display_name,
-    ps.country_code,
-    ps.country_name,
-    ps.profile_image,
-    ps.bio,
-    ps.notable_wins,
-    ps.is_verified,
+    id,
+    'gfx' AS source,
+    player_hash AS external_id,
+    name,
+    name AS name_display,
+    NULL AS country_code,
+    NULL AS profile_image_url,
+    created_at,
+    updated_at
+FROM gfx_players
 
-    -- 연결 정보
-    lp.manual_player_id,
-    lp.wsop_player_id,
-    lp.gfx_player_id,
-    lp.match_confidence,
-    lp.link_verified,
+UNION ALL
 
-    -- 소스 개수
-    (CASE WHEN lp.manual_player_id IS NOT NULL THEN 1 ELSE 0 END +
-     CASE WHEN lp.wsop_player_id IS NOT NULL THEN 1 ELSE 0 END +
-     CASE WHEN lp.gfx_player_id IS NOT NULL THEN 1 ELSE 0 END) AS linked_sources_count,
+SELECT
+    id,
+    'wsop' AS source,
+    wsop_player_id AS external_id,
+    name,
+    name AS name_display,
+    country_code,
+    profile_image_url,
+    created_at,
+    updated_at
+FROM wsop_players;
 
-    ps.created_at,
-    GREATEST(ps.updated_at, NOW()) AS last_updated
-
-FROM player_sources ps
-LEFT JOIN linked_players lp ON
-    (ps.source = 'manual' AND ps.source_id = lp.manual_player_id) OR
-    (ps.source = 'wsop' AND ps.source_id = lp.wsop_player_id) OR
-    (ps.source = 'gfx' AND ps.source_id = lp.gfx_player_id)
-ORDER BY ps.priority, ps.name;
+-- 연결된 플레이어 정보는 player_link_mapping에서 조회
+-- SELECT * FROM player_link_mapping WHERE is_verified = TRUE;
 ```
 
 ### 5.2 unified_events (통합 이벤트 뷰)
@@ -1097,13 +1023,16 @@ ORDER BY start_date DESC;
 
 ### 5.3 unified_chip_data (통합 칩 데이터 뷰)
 
+> ⚠️ **변경됨 (2026-01-16)**: chip_snapshots 삭제 → wsop_chip_counts/gfx_hand_players만
+
 ```sql
 -- ============================================================================
 -- unified_chip_data: 통합 칩 데이터 뷰
--- WSOP+, GFX 칩 데이터 병합
+-- WSOP+ 칩카운트 + GFX 핸드별 스택 병합 (chip_snapshots 삭제됨)
 -- ============================================================================
 
 CREATE OR REPLACE VIEW unified_chip_data AS
+-- WSOP Chip Counts
 SELECT
     'wsop' AS source,
     wcc.id,
@@ -1116,51 +1045,30 @@ SELECT
     wcc.table_num,
     wcc.seat_num,
     wcc.recorded_at,
-    wcc.source::TEXT AS data_source
-
+    wcc.source AS data_source
 FROM wsop_chip_counts wcc
-JOIN wsop_players wp ON wcc.player_id = wp.id
+LEFT JOIN wsop_players wp ON wcc.player_id = wp.id
 
 UNION ALL
 
+-- GFX Hand Players (핸드 종료 시점 스택)
 SELECT
     'gfx' AS source,
     ghp.id,
-    gs.id AS event_id,
+    NULL::UUID AS event_id,
     ghp.player_id,
     ghp.player_name,
     NULL AS country_code,
-    ghp.end_stack_amt AS chip_count,
-    NULL AS rank,
-    NULL AS table_num,
+    ghp.end_stack_amt::BIGINT AS chip_count,
+    NULL::INTEGER AS rank,
+    NULL::INTEGER AS table_num,
     ghp.seat_num,
     gh.start_time AS recorded_at,
-    'gfx' AS data_source
-
+    'gfx_hand' AS data_source
 FROM gfx_hand_players ghp
-JOIN gfx_hands gh ON ghp.hand_id = gh.id
-JOIN gfx_sessions gs ON gh.session_id = gs.session_id
+JOIN gfx_hands gh ON ghp.hand_id = gh.id;
 
-UNION ALL
-
-SELECT
-    'cuesheet' AS source,
-    cs.id,
-    cs.session_id AS event_id,
-    NULL AS player_id,
-    (pd.value->>'player_name')::TEXT AS player_name,
-    (pd.value->>'nationality')::TEXT AS country_code,
-    (pd.value->>'chipcount')::BIGINT AS chip_count,
-    (pd.value->>'rank')::INTEGER AS rank,
-    (pd.value->>'table_no')::INTEGER AS table_num,
-    (pd.value->>'seat_no')::INTEGER AS seat_num,
-    cs.snapshot_time AS recorded_at,
-    'cuesheet' AS data_source
-
-FROM chip_snapshots cs
-CROSS JOIN LATERAL jsonb_array_elements(cs.players_data) AS pd(value)
-
-ORDER BY recorded_at DESC;
+-- chip_snapshots UNION 제거됨 (테이블 삭제)
 ```
 
 ### 5.4 v_job_queue_summary (작업 큐 요약 뷰)
@@ -1532,11 +1440,11 @@ INSERT INTO sync_status (source, entity_type, status, sync_interval_minutes) VAL
 ('wsop', 'events', 'pending', 30),
 ('wsop', 'players', 'pending', 30),
 ('wsop', 'chip_counts', 'pending', 15),
-('manual', 'players', 'pending', 120),
+-- ('manual', 'players', 'pending', 120),  -- manual_players 삭제됨
 ('cuesheet', 'broadcast_sessions', 'pending', 60),
 ('cuesheet', 'cue_sheets', 'pending', 60),
-('cuesheet', 'cue_items', 'pending', 30),
-('cuesheet', 'chip_snapshots', 'pending', 15);
+('cuesheet', 'cue_items', 'pending', 30);
+-- ('cuesheet', 'chip_snapshots', 'pending', 15);  -- chip_snapshots 삭제됨
 ```
 
 ---

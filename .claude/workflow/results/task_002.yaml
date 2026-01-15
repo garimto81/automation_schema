@@ -1,0 +1,259 @@
+task_id: task_002
+agent: database-specialist
+status: completed
+started_at: 2026-01-15T10:30:00Z
+completed_at: 2026-01-15T10:45:00Z
+output:
+  summary: |
+    DB 스키마 정합성 검증 완료. 3개 마이그레이션 파일에서 4개 치명적 이슈와 2개 경고 발견.
+    player_overrides 테이블 스키마 불일치로 뷰/함수 실행 실패 예상.
+
+  validation_results:
+    view_integrity: failed
+    function_consistency: failed
+    index_efficiency: passed
+    constraint_validity: failed
+    migration_order: passed
+    rollback_safety: warning
+
+  issues_found:
+    - issue_id: CRIT-001
+      severity: critical
+      category: view_integrity
+      description: "v_render_chip_display, v_render_elimination, v_render_at_risk 뷰가 존재하지 않는 player_overrides 테이블 참조"
+      location: "20260117000000_fix_render_views.sql"
+      affected_lines: [49, 85, 134]
+      root_cause: |
+        20260116000000_schema_simplification.sql에서 player_overrides.manual_player_id 컬럼 삭제,
+        gfx_player_id 컬럼 추가했으나, 20260117000000 마이그레이션이 업데이트 안됨.
+      impact: |
+        - v_render_chip_display: player_overrides 조인 실패
+        - v_render_elimination: player_overrides 조인 실패
+        - v_render_at_risk: player_overrides 조인 실패
+        - 뷰 생성은 성공하나 쿼리 실행 시 오류 발생
+      sql_error: |
+        ERROR: column po.corrected_name does not exist
+        LINE 26: COALESCE(po.corrected_name, ghp.player_name)
+      fix_required: |
+        player_overrides 스키마 확인 후 뷰 조인 로직 수정 필요.
+        - corrected_name 컬럼 존재 여부 확인
+        - country_code 컬럼 존재 여부 확인
+        - is_active 컬럼 존재 여부 확인
+
+    - issue_id: CRIT-002
+      severity: critical
+      category: constraint_validity
+      description: "player_overrides 제약조건 불일치"
+      location: "20260116000000_schema_simplification.sql, 20260117000000_fix_render_views.sql"
+      affected_lines: ["20260116:24-25", "20260117:49,85,134"]
+      root_cause: |
+        schema_simplification이 player_overrides.gfx_player_id를 추가했으나,
+        fix_render_views가 이전 스키마(manual_player_id 기반)를 가정.
+      impact: |
+        - 20260116: gfx_player_id 컬럼 추가, manual_player_id 삭제
+        - 20260117: manual_player_id 기반 조인 시도 → 실패
+        - player_overrides 테이블 실제 구조 불명확
+      fix_required: |
+        player_overrides 최종 스키마 정의 필요:
+        OPTION A) gfx_player_id + wsop_player_id (20260116 기준)
+        OPTION B) manual_player_id + wsop_player_id (20260113 기준)
+
+    - issue_id: CRIT-003
+      severity: critical
+      category: function_consistency
+      description: "렌더링 함수들이 존재하지 않는 player_overrides 컬럼 참조"
+      location: "20260117200000_upgrade_render_functions_v3.sql"
+      affected_lines: [222, 228, 444, 451]
+      root_cause: |
+        함수 내부에서 player_overrides.corrected_name, country_code 컬럼 참조하나
+        실제 테이블 정의에는 해당 컬럼 미존재 (20260113 schema 기준).
+      impact: |
+        - get_player_history_data(): 실행 실패
+        - get_player_name_data(): 실행 실패
+        - 모든 NAME 계열 컴포지션 렌더링 불가
+      sql_error: |
+        ERROR: column po.corrected_name does not exist
+        ERROR: column po.country_code does not exist
+      fix_required: |
+        player_overrides 스키마 확인 후 함수 수정:
+        1) 실제 컬럼명 확인 (field_name + override_value 형태인지)
+        2) 조인 로직 재작성
+        3) JSONB 필드 파싱 로직 추가 가능성
+
+    - issue_id: CRIT-004
+      severity: critical
+      category: view_integrity
+      description: "manual_players 테이블 삭제 후 참조 해제 누락"
+      location: "20260114120000_gfx_aep_render_mapping.sql"
+      affected_lines: [463, 464, 465, 474, 530]
+      root_cause: |
+        20260114 마이그레이션이 manual_players 테이블 참조하나,
+        20260116에서 manual_players 삭제됨.
+        20260117000000이 수정했으나 20260114120000은 그대로 유지.
+      impact: |
+        - v_render_chip_display (20260114 버전): manual_players 조인 실패
+        - v_render_elimination (20260114 버전): manual_players 조인 실패
+        - 20260117000000이 뷰를 재정의하므로 최종적으로는 문제 없으나 마이그레이션 순서 이슈
+      fix_required: |
+        20260114120000 마이그레이션 수정 또는 20260116 이후 적용 방지 필요.
+        현재는 20260117000000이 덮어쓰므로 실행 순서상 문제 없으나 혼란 야기.
+
+    - issue_id: WARN-001
+      severity: warning
+      category: migration_order
+      description: "player_overrides 스키마 정의 중복/불일치"
+      location: "20260113082705_03_manual_schema.sql, 20260116000000_schema_simplification.sql"
+      affected_lines: ["20260113:201-239", "20260116:12-25"]
+      root_cause: |
+        03_manual_schema.sql (20260113)에서 player_overrides 정의:
+          - manual_player_id UUID REFERENCES manual_players(id)
+          - wsop_player_id UUID
+          - field_name, override_value 구조
+
+        schema_simplification (20260116)에서 수정:
+          - manual_player_id 컬럼 삭제
+          - gfx_player_id UUID REFERENCES gfx_players(id) 추가
+
+        하지만 field_name, override_value 구조는 유지되는지 불명확.
+      impact: |
+        - corrected_name, country_code가 직접 컬럼인지 override_value 안의 값인지 불명확
+        - 20260117 마이그레이션들이 직접 컬럼으로 가정하나 실제 스키마는 JSONB 형태일 가능성
+      fix_required: |
+        player_overrides 최종 스키마 명확화:
+        1) 실제 DB에서 \d player_overrides 실행
+        2) corrected_name, country_code, is_active 컬럼 존재 여부 확인
+        3) 존재하지 않으면 override_value JSONB 파싱 로직 추가
+
+    - issue_id: WARN-002
+      severity: warning
+      category: rollback_safety
+      description: "20260116 schema_simplification 롤백 불가능"
+      location: "20260116000000_schema_simplification.sql"
+      affected_lines: [37, 47, 87]
+      root_cause: |
+        manual_audit_log, chip_snapshots, manual_players 테이블 CASCADE 삭제하나
+        롤백 스크립트 없음. 데이터 손실 발생.
+      impact: |
+        - 롤백 시 테이블 구조만 복구, 데이터는 영구 손실
+        - 프로덕션 환경 적용 시 위험
+      fix_required: |
+        백업 전략 필요:
+        1) 마이그레이션 실행 전 pg_dump
+        2) 롤백 스크립트 작성 (CREATE TABLE AS SELECT)
+        3) 단계별 마이그레이션으로 분할
+
+  recommendations:
+    - priority: P0
+      action: "player_overrides 스키마 실제 확인"
+      command: |
+        supabase db diff --schema public --table player_overrides
+        또는
+        psql -c "\d player_overrides"
+      reason: "corrected_name, country_code, is_active 컬럼 존재 여부 확인 필수"
+
+    - priority: P0
+      action: "20260117000000_fix_render_views.sql 수정"
+      target_lines: [49, 85, 134]
+      fix_approach: |
+        CASE 1) corrected_name 컬럼 존재하는 경우:
+          - 조인 조건 확인 (gfx_player_id 기반으로 변경)
+
+        CASE 2) corrected_name 컬럼 없는 경우:
+          - override_value JSONB 필드 파싱 추가
+          - get_player_field_with_override() 함수 활용
+
+        예시:
+        ```sql
+        LEFT JOIN player_overrides po
+          ON po.gfx_player_id = gp.id
+          AND po.field_name = 'name'
+          AND po.is_active = TRUE
+        COALESCE(po.override_value, ghp.player_name)
+        ```
+
+    - priority: P0
+      action: "20260117200000_upgrade_render_functions_v3.sql 수정"
+      target_lines: [222, 228, 444, 451]
+      fix_approach: |
+        player_overrides 조인 로직 통일:
+        1) gfx_player_id 기반 조인
+        2) field_name별 override_value 조회
+        3) 함수 get_player_field_with_override() 재사용
+
+    - priority: P1
+      action: "20260114120000_gfx_aep_render_mapping.sql 정리"
+      reason: |
+        manual_players 참조 제거하거나 주석 처리.
+        20260117000000이 이미 재정의하므로 실행 순서만 명확하면 OK.
+
+    - priority: P1
+      action: "마이그레이션 순서 문서화"
+      reason: |
+        20260116 (schema_simplification) 이전/이후로 구분하여
+        player_overrides 스키마 변경 이력 명확화.
+
+    - priority: P2
+      action: "통합 테스트 스크립트 작성"
+      script: |
+        -- 1. 뷰 생성 테스트
+        SELECT * FROM v_render_chip_display LIMIT 1;
+        SELECT * FROM v_render_elimination LIMIT 1;
+        SELECT * FROM v_render_at_risk LIMIT 1;
+
+        -- 2. 함수 실행 테스트
+        SELECT get_chip_display_data(1, 1, 9);
+        SELECT get_player_history_data(1, 1, 'TEST_PLAYER');
+        SELECT get_player_name_data(1, 1, 1, 'NAME');
+
+        -- 3. player_overrides 구조 확인
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'player_overrides'
+        ORDER BY ordinal_position;
+
+    - priority: P3
+      action: "인덱스 효율성 검토"
+      reason: |
+        player_overrides 조인 조건 변경 시 인덱스 재구성 필요:
+        - gfx_player_id 인덱스 추가
+        - field_name + is_active 복합 인덱스 고려
+
+  migration_dependency_graph: |
+    20260113082705 (03_manual_schema)
+      → player_overrides 정의 (manual_player_id 기반)
+
+    20260114120000 (gfx_aep_render_mapping)
+      → manual_players 참조 뷰 생성
+
+    20260116000000 (schema_simplification)
+      → manual_players 삭제 ⚠️ BREAKING
+      → player_overrides 수정 (gfx_player_id 기반)
+
+    20260117000000 (fix_render_views)
+      → manual_players → player_overrides 변경
+      → ❌ 하지만 player_overrides 스키마 불일치
+
+    20260117100000 (update_compositions_v2)
+      → 컴포지션 메타데이터만 업데이트 (영향 없음)
+
+    20260117200000 (upgrade_render_functions_v3)
+      → ❌ player_overrides 컬럼 미존재 참조
+
+  next_steps:
+    - step: 1
+      action: "player_overrides 실제 스키마 확인"
+      owner: database-specialist
+
+    - step: 2
+      action: "20260117000000, 20260117200000 수정안 작성"
+      owner: database-specialist
+
+    - step: 3
+      action: "통합 테스트 실행"
+      owner: database-specialist
+
+    - step: 4
+      action: "마이그레이션 재실행 검증"
+      owner: database-specialist
+
+errors: null

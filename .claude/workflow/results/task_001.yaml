@@ -1,0 +1,256 @@
+task_id: task_001
+agent: code-reviewer
+status: completed
+started_at: 2026-01-15T10:00:00Z
+completed_at: 2026-01-15T10:30:00Z
+
+output:
+  summary: |
+    세 마이그레이션 파일 코드 리뷰 완료. 전반적으로 구조는 양호하나
+    player_overrides 중복 참조로 인한 데이터 정합성 문제(Critical),
+    배열 정렬 순서 불일치(Critical), NULL 안전성 문제(High)가 발견됨.
+    권장: 마이그레이션 적용 전 발견사항 수정 필요.
+
+  issues_found:
+    critical:
+      - issue_id: C001
+        file: C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+        line: 49
+        severity: CRITICAL
+        category: Data Integrity
+        title: "player_overrides 중복 참조 위험"
+        description: |
+          v_render_chip_display, v_render_elimination, v_render_at_risk 뷰에서
+          LEFT JOIN player_overrides po ON po.gfx_player_id = gp.id AND po.is_active = TRUE
+          테이블에 동일 gfx_player_id를 가진 여러 활성 레코드 존재 시
+          중복 행 반환으로 인한 중복 데이터 렌더링 발생 가능.
+        fix: |
+          player_overrides 테이블에 gfx_player_id + is_active에 대한
+          UNIQUE CONSTRAINT 추가 필요.
+          또는 LEFT JOIN시 subquery로 최신 레코드만 선택:
+          LEFT JOIN (
+            SELECT DISTINCT ON (gfx_player_id) *
+            FROM player_overrides
+            WHERE is_active = TRUE
+            ORDER BY gfx_player_id, updated_at DESC
+          ) po ON po.gfx_player_id = gp.id
+
+      - issue_id: C002
+        file: C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+        line: "133-158"
+        severity: CRITICAL
+        category: Data Integrity
+        title: "get_chip_flow_data() 배열 정렬 순서 불일치"
+        description: |
+          hand_sequence CTE에서 ORDER BY rn DESC로 조회한 후
+          - chips_10h: SELECT ... WHERE rn <= 10 ORDER BY rn DESC (최신→과거)
+          - chips_20h: SELECT ... WHERE rn <= 20 ORDER BY rn DESC (최신→과거)
+          - chips_30h: SELECT ... ORDER BY rn DESC (최신→과거 동일)
+
+          실제로는 ORDER BY rn DESC 결과를 배열화하므로
+          최신값이 배열 첫번째(인덱스 0)인 시계열 역순 데이터 반환.
+          AE 템플릿에서 시간순(과거→현재) 기대시 그래프 오류.
+
+        fix: |
+          배열 생성 로직을 명확히 수정:
+          ARRAY(SELECT chips FROM hand_sequence
+                WHERE rn <= 10 ORDER BY rn ASC)  -- 과거→현재 순서 보장
+          또는 주석으로 의도 명시:
+          -- Returns array in reverse chronological order: newest first [t0, t-1, t-2, ...]
+
+      - issue_id: C003
+        file: C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+        line: "75-77"
+        severity: CRITICAL
+        category: Error Handling
+        title: "get_chip_comparison_data() NULL 체크 불완전"
+        description: |
+          IF v_selected_chips IS NULL OR v_total_chips IS NULL OR v_total_chips = 0 THEN
+              RETURN '{}'::JSONB;
+          END IF;
+
+          v_selected_chips의 NULL 체크는 있으나,
+          플레이어가 앉지 않았거나(sitting_out = TRUE)
+          손이 진행 중인 경우 ghp.end_stack_amt가 0일 수 있음.
+
+          또한 selected_chips = 0, total_chips > 0인 경우
+          0% 백분율이 정상이므로 체크 로직이 과도함.
+
+        fix: |
+          로직 수정:
+          IF v_selected_chips IS NULL OR v_total_chips IS NULL THEN
+              RETURN '{}'::JSONB;
+          END IF;
+
+          IF v_total_chips = 0 THEN
+              -- 칩이 없는 경우는 비정상 상태
+              RETURN '{}'::JSONB;
+          END IF;
+
+    high:
+      - issue_id: H001
+        file: C:\claude\automation_schema\supabase\migrations\20260117100000_update_compositions_v2.sql
+        line: 273
+        severity: HIGH
+        category: Data Integrity
+        title: "ON CONFLICT 절에서 slot_range_start 컬럼 위험"
+        description: |
+          INSERT INTO gfx_aep_field_mappings ...
+          ON CONFLICT (composition_name, target_field_key, COALESCE(slot_range_start, 0))
+
+          slot_range_start가 NULL인 경우 COALESCE(NULL, 0) = 0이므로,
+          slot_range_start=NULL과 slot_range_start=0이 같은 것으로 취급됨.
+
+          실제로 중복되지 않는 행들을 덮어쓸 수 있음.
+
+        fix: |
+          테이블 스키마 확인 후:
+          1) slot_range_start가 NOT NULL이면 기존 코드 유지 가능
+          2) NULL 허용시 다음과 같이 수정:
+             ON CONFLICT (composition_name, target_field_key)
+             WHERE slot_range_start IS NULL
+             DO UPDATE ...
+
+      - issue_id: H002
+        file: C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+        line: "98-135"
+        severity: HIGH
+        category: Performance
+        title: "v_render_at_risk 뷰 서브쿼리 비효율"
+        description: |
+          ranked_players CTE에서 불필요한 열(hand_num, ghp.player_name) 조회 후
+          외부에서 po.corrected_name으로 다시 덮어씀.
+
+          CTE에서 이미 COALESCE를 수행하거나, player_overrides를 미리 조인하면
+          코드 간결성 + 성능 향상.
+
+        fix: |
+          CTE 내에서 player_overrides 조인 추가:
+          WITH ranked_players AS (
+              SELECT
+                  ...
+                  LEFT JOIN gfx_players gp ON ghp.player_id = gp.id
+                  LEFT JOIN player_overrides po
+                    ON po.gfx_player_id = gp.id AND po.is_active = TRUE
+                  ...
+                  COALESCE(po.corrected_name, ghp.player_name) AS player_name
+              ...
+          )
+          SELECT ... FROM ranked_players ...
+          -- 외부 JOIN 제거
+
+    medium:
+      - issue_id: M001
+        file: C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+        line: "114-145"
+        severity: MEDIUM
+        category: Code Quality
+        title: "get_chip_flow_data() 변수명 혼동"
+        description: |
+          v_player_name_upper := UPPER(p_player_name);
+          이후 실제로 사용되지 않음.
+          대신 SELECT 내에서 UPPER()가 다시 호출됨(line 171).
+
+          또한 p_player_name을 LOWER()로 비교하는데
+          반환값은 UPPER()로 포맷하는 로직 일관성 부족.
+
+        fix: |
+          변수 제거 또는 일관되게 사용:
+          SELECT UPPER(COALESCE(po.corrected_name, ghp.player_name)) AS player_name
+          대신에:
+          SELECT ghp.player_name으로 저장 후 return시 UPPER() 적용
+
+      - issue_id: M002
+        file: C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+        line: "30"
+        severity: MEDIUM
+        category: SQL Style
+        title: "format_bbs() 함수 검증 누락"
+        description: |
+          format_bbs(ghp.end_stack_amt, (gh.blinds->>'big_blind_amt')::BIGINT)
+
+          blind_info 항상 존재하는지 확인 필요. JSON null 처리 로직 없음.
+          gh.blinds->>'big_blind_amt'가 NULL인 경우 함수 호출 에러 가능.
+
+        fix: |
+          COALESCE 추가:
+          format_bbs(
+              ghp.end_stack_amt,
+              COALESCE((gh.blinds->>'big_blind_amt')::BIGINT, 0)
+          )
+
+      - issue_id: M003
+        file: C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+        line: "150-153"
+        severity: MEDIUM
+        category: Code Quality
+        title: "배열 생성 로직 복잡성"
+        description: |
+          3개의 유사한 배열 생성 로직이 반복됨:
+          ARRAY(SELECT chips FROM hand_sequence WHERE rn <= 10 ORDER BY rn DESC)
+          ARRAY(SELECT chips FROM hand_sequence WHERE rn <= 20 ORDER BY rn DESC)
+          ARRAY(SELECT chips FROM hand_sequence ORDER BY rn DESC)
+
+          반복 코드로 인한 유지보수 어려움.
+
+        fix: |
+          함수화 또는 동적 배열 구성:
+          SELECT
+              ARRAY_SLICE(array_agg(...), 1, 10),
+              ARRAY_SLICE(array_agg(...), 1, 20),
+              ARRAY_SLICE(array_agg(...), 1, 30)
+
+  recommendations:
+    - id: R001
+      priority: URGENT
+      description: |
+        플레이어 오버라이드 테이블 스키마 점검:
+        gfx_player_id에 대해 최대 1개 활성 레코드만 존재하는지 확인.
+        필요시 UNIQUE CONSTRAINT 또는 trigger 추가.
+      affected_files:
+        - C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+        - C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+
+    - id: R002
+      priority: URGENT
+      description: |
+        get_chip_flow_data() 함수의 배열 시계열 순서 검증:
+        실제 AE 템플릿에서 그래프 표시를 테스트해서
+        시간순 정렬(과거→현재 vs 현재→과거) 확인.
+      affected_files:
+        - C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+
+    - id: R003
+      priority: HIGH
+      description: |
+        성능 테스트: 3개의 뷰가 LEFT JOIN으로 연결된 경우
+        대규모 세션 데이터(>1000 hands)에서 쿼리 응답시간 측정.
+        인덱스 추가 필요 여부 판단.
+      affected_files:
+        - C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+
+    - id: R004
+      priority: MEDIUM
+      description: |
+        코드 일관성: 모든 함수에서 NULL 처리 패턴 통일.
+        현재 함수마다 다른 방식으로 처리 중(line 75-77 vs line 234-236).
+      affected_files:
+        - C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+
+  files_reviewed:
+    - path: C:\claude\automation_schema\supabase\migrations\20260117000000_fix_render_views.sql
+      status: REVIEWED
+      lines: 264
+      issues: 3 (1 critical, 1 high, 1 medium)
+
+    - path: C:\claude\automation_schema\supabase\migrations\20260117100000_update_compositions_v2.sql
+      status: REVIEWED
+      lines: 312
+      issues: 1 (1 high)
+
+    - path: C:\claude\automation_schema\supabase\migrations\20260117200000_upgrade_render_functions_v3.sql
+      status: REVIEWED
+      lines: 520
+      issues: 6 (2 critical, 1 high, 3 medium)
+
+errors: null

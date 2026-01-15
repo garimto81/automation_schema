@@ -1,9 +1,8 @@
-# 08. GFX JSON DB ↔ AEP 렌더링 필드 매핑
+# 08. GFX JSON DB → AEP 자막 매핑 명세서
 
-GFX JSON DB 데이터와 After Effects 컴포지션 필드 간의 바인딩 규칙 정의
-
-**Version**: 1.0.0
-**Date**: 2026-01-14
+**Version**: 2.0.0
+**Last Updated**: 2026-01-14
+**Status**: Active
 **Project**: Feature Table Automation (FT-0001)
 
 ---
@@ -12,86 +11,104 @@ GFX JSON DB 데이터와 After Effects 컴포지션 필드 간의 바인딩 규�
 
 ### 1.1 목적
 
-GFX JSON DB에 저장된 포커 게임 데이터를 After Effects 컴포지션의 텍스트/이미지 레이어에 동적으로 바인딩하여 방송 그래픽을 자동 생성합니다.
+GFX JSON DB 데이터를 After Effects **26개 컴포지션** (방송 전or후 뽑기 10개 + 방송 중 뽑기 16개)의 자막 필드에 매핑하는 전체 명세서.
 
-### 1.2 데이터 흐름
+### 1.2 범위 정의
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                           Data Flow Architecture                             │
-└─────────────────────────────────────────────────────────────────────────────┘
+| 포함 범위 | 개수 | 설명 |
+|-----------|------|------|
+| 방송 전or후 뽑기 | 10개 | 스케줄, 이벤트 정보, 스태프 등 |
+| 방송 중 뽑기 | 16개 | 칩 디스플레이, 플레이어 정보 등 |
+| **총합** | **26개** | |
 
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   SOURCE DATA   │     │  ORCHESTRATION  │     │   AEP RENDER    │
-│                 │     │                 │     │                 │
-│ ┌─────────────┐ │     │ ┌─────────────┐ │     │ ┌─────────────┐ │
-│ │ gfx_hands   │─┼────▶│ │ job_queue   │─┼────▶│ │ aerender    │ │
-│ │ gfx_players │ │     │ │             │ │     │ │             │ │
-│ └─────────────┘ │     │ └─────────────┘ │     │ └─────────────┘ │
-│                 │     │       │         │     │       │         │
-│ ┌─────────────┐ │     │       ▼         │     │       ▼         │
-│ │ wsop_       │ │     │ ┌─────────────┐ │     │ ┌─────────────┐ │
-│ │ standings   │─┼────▶│ │render_queue │─┼────▶│ │ Output      │ │
-│ │ chip_counts │ │     │ │ (gfx_data)  │ │     │ │ .mp4/.mov   │ │
-│ └─────────────┘ │     │ └─────────────┘ │     │ └─────────────┘ │
-│                 │     │                 │     │                 │
-│ ┌─────────────┐ │     │                 │     │                 │
-│ │ manual_     │ │     │                 │     │                 │
-│ │ players     │─┼────▶│                 │     │                 │
-│ └─────────────┘ │     │                 │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
+| 제외 범위 | 위치 | 사유 |
+|-----------|------|------|
+| Feature Table Leaderboard MAIN/SUB | Comp/ 폴더 | 사용자 요청 범위 외 |
+| 14개 element | Source comp/ 폴더 | 정적 precomp |
+| Chips (Source Comp) | Source comp/ 폴더 | v2.0.0 제외 (Comp 이하 폴더만 수집) |
 
-### 1.3 연관 문서
+### 1.3 출력 언어
 
-| 문서 | 설명 |
-|------|------|
-| `02-GFX-JSON-DB.md` | GFX JSON 데이터베이스 스키마 |
-| `03-WSOP+-DB.md` | WSOP+ 데이터베이스 스키마 |
-| `04-Manual-DB.md` | 수동 플레이어 관리 스키마 |
-| `06-AEP-Analysis-DB.md` | AEP 컴포지션 분석 스키마 |
-| `07-Supabase-Orchestration.md` | 오케스트레이션 레이어 |
+모든 자막은 **영문 출력** (글로벌 시청자 대상)
+
+### 1.4 대소문자 처리 규칙
+
+> **Case-Insensitive 매칭**: 모든 플레이어명 매칭은 `LOWER()` 함수를 사용하여 대소문자를 무시합니다.
+> - DB 저장: 원본 케이싱 유지 (`"Phil"`)
+> - DB 조회: `WHERE LOWER(player_name) = LOWER(:search_name)` (대소문자 무관 매칭)
+> - AEP 출력: `UPPER()` 변환 (`"PHIL"`)
 
 ---
 
-## 2. 컴포지션별 필드 매핑
+## 2. 데이터 소스 우선순위
 
-### 2.1 Chip Display 컴포지션 (9개 슬롯)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    데이터 소스 우선순위                      │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  1️⃣ GFX JSON DB (기본 소스 - Primary)                      │
+│     - gfx_hand_players: 플레이어명, 칩 카운트               │
+│     - gfx_hands: 블라인드, 팟, 보드 카드                    │
+│     - gfx_sessions: 이벤트 제목, payouts                    │
+│     → 실시간 피처 테이블 데이터                             │
+│                                                             │
+│  2️⃣ WSOP+ DB (보조 소스 - Secondary)                       │
+│     - wsop_standings: 전체 순위표 (30명+)                   │
+│     - wsop_events: 이벤트 상세 정보, 공식 payouts           │
+│     → 피처 테이블 외 전체 데이터                            │
+│                                                             │
+│  3️⃣ Manual DB (오버라이드 - Override Only)                 │
+│     - ❌ 기본 데이터 소스 아님                              │
+│     - ✅ 잘못된 데이터 수정 (이름 오타 등)                  │
+│     - ✅ 선수 프로필 보완 (국적, 프로필 이미지 등)          │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
 
-**대상 컴포지션**: `_MAIN Mini Chip Count`, `_SUB_Mini Chip Count`
+### 2.1 소스별 역할
 
-> **Note**: 실제 AEP 분석 결과 슬롯 수는 **9개**입니다. (full_analysis.json 기준)
+| 소스 DB | 테이블 | 역할 | 우선순위 |
+|---------|--------|------|----------|
+| GFX JSON DB | gfx_hand_players | 기본 소스: 플레이어명, 칩 카운트 | Primary |
+| GFX JSON DB | gfx_hands | 기본 소스: 블라인드, 팟, 보드 카드 | Primary |
+| GFX JSON DB | gfx_sessions | 기본 소스: 이벤트 제목, payouts | Primary |
+| WSOP+ DB | wsop_standings | 보조 소스: 전체 순위표 (30명+) | Secondary |
+| WSOP+ DB | wsop_events | 보조 소스: 이벤트 상세, 공식 payouts | Secondary |
+| Manual DB | manual_players | 오버라이드: 잘못된 데이터 수정, 프로필 보완 | Override |
+| Manual DB | unified_players | 통합 뷰 (Manual 오버라이드 적용) | - |
 
-#### 필드 매핑 테이블
+---
 
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|--------|---------------|---------|---------------|
-| `name 1~9` | 9 | `gfx_hand_players` | `player_name` | **정렬**: `end_stack_amt DESC`. slot 1 = 칩 리더. `sitting_out = TRUE` 제외. **Case-Insensitive**: `name`, `Name` 모두 매칭 |
-| `chip 1~9` | 9 | `gfx_hand_players` | `end_stack_amt` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000"). **Case-Insensitive**: `chip`, `Chip` 모두 매칭 |
-| `rank 1~9` | 9 | (계산) | - | **계산**: `ROW_NUMBER() OVER (ORDER BY end_stack_amt DESC)`. rank = slot_index |
-| `bbs 1~9` | 9 | (계산) | - | **계산**: `end_stack_amt / big_blind_amt`. **변환**: `format_bbs()` (소수점 1자리) |
-| `country_flag 1~9` | 9 | `manual_players` | `country_code` | **⚠️ GFX JSON에 없음** → Manual DB 전용. **fallback**: 'XX' (Unknown). **변환**: ISO → Flag 경로 |
+## 3. 카테고리별 컴포지션 매핑 (26개)
 
-#### 특수 필드
+### 3.1 chip_display (6개) - 칩 표시
 
-| AEP Layer Name | 용도 | 매핑 로직 |
-|----------------|------|-----------|
-| `AVERAGE STACK : ...` | 평균 스택 표시 | `AVG(end_stack_amt)` 계산 후 포맷팅 |
+| # | 컴포지션 | 필드 키 | GFX 소스 | 슬롯 수 | 변환 |
+|---|----------|---------|----------|---------|------|
+| 1 | _MAIN Mini Chip Count | name, chips, bbs, rank | gfx_hand_players | **9** | UPPER, format_chips, format_bbs |
+| 2 | _SUB_Mini Chip Count | name, chips, bbs, rank | gfx_hand_players | **9** | UPPER, format_chips, format_bbs |
+| 3 | Chips In Play x3 | chips_in_play, level | gfx_hands.blinds, 계산 | **3** | format_chips |
+| 4 | Chips In Play x4 | chips_in_play, level | gfx_hands.blinds, 계산 | **4** | format_chips |
+| 5 | Chip Comparison | selected_player_%, others_% | gfx_hand_players + UI 선택 | 0 | format_percent (v2.0) |
+| 6 | Chip Flow | chips_10h[], chips_20h[], chips_30h[] | gfx_hand_players 히스토리 | 0 | 배열 (v2.0) |
 
-#### 데이터 추출 쿼리
+> **v2.0.0 변경**: Chip VPIP는 NAME 컴포지션 내 필드로 통합됨
+
+**_MAIN Mini Chip Count 매핑 로직:**
 
 ```sql
+-- _MAIN Mini Chip Count: 9명까지 칩 순위 표시 (실제 AEP 슬롯 수)
 SELECT
-    ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt DESC) AS rank,
-    hp.player_name AS name,
+    ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt DESC) AS slot_index,
+    UPPER(hp.player_name) AS name,
     format_chips(hp.end_stack_amt) AS chips,
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs,
-    -- country_code는 GFX JSON에 없음 → Manual DB에서 조회
-    COALESCE(mp.country_code, 'XX') AS country_code,
-    get_flag_path(COALESCE(mp.country_code, 'XX')) AS flag_path
+    slot_index::TEXT AS rank,
+    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN manual_players mp ON LOWER(hp.player_name) = LOWER(mp.name)
+LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
 WHERE hp.sitting_out = FALSE
   AND h.session_id = :session_id
   AND h.hand_num = :hand_num
@@ -99,80 +116,87 @@ ORDER BY hp.end_stack_amt DESC
 LIMIT 9;
 ```
 
----
-
-### 2.2 Leaderboard 컴포지션 (9개 슬롯)
-
-**대상 컴포지션**: `_Feature Table Leaderboard` (메인), `Feature Table Leaderboard MAIN`, `Feature Table Leaderboard SUB` (소스 컴프)
-
-> **Note**: AEP 분석 결과 실제 슬롯 수는 **9개**입니다. (full_analysis.json 기준)
-
-#### 필드 매핑 테이블
-
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|--------|---------------|---------|---------------|
-| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | **정렬**: JSONB `rank` 필드 오름차순. slot 1 = 전체 1위. **Case-Insensitive** |
-| `Chips 1~9` | 9 | `wsop_standings` | `standings->>'chip_count'` | **정렬**: 동일. **변환**: `format_chips()` (1500000 → "1,500,000"). **Case-Insensitive** |
-| `Date 1~9` | 9 | (계산) | - | **⚠️ 순위 번호 표시용** (1, 2, 3...). 날짜 아님. `ROW_NUMBER()` 사용 |
-| `Flag 1~9` | 8 | `manual_players` | `country_code` | **⚠️ Flag 3 누락** (1,2,4,5,6,7,8,9만 존재). **fallback**: 'XX'. **Case-Insensitive** |
-
-> **⚠️ BBs 슬롯 없음**: `bbs` 레이어는 헤더 텍스트만 존재하고 데이터 슬롯 (`BBs 1~9`)은 없습니다. BB 값은 Chips 레이어에 포함하거나 별도 처리 필요.
-
-#### 데이터 추출 쿼리
+**Chip Comparison 매핑 로직 (v2.0 신규):**
 
 ```sql
+-- UI에서 선택된 플레이어 vs 나머지 백분율 비교
+WITH total_chips AS (
+    SELECT SUM(end_stack_amt) AS total
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = :session_id
+      AND h.hand_num = :hand_num
+      AND hp.sitting_out = FALSE
+),
+selected_player AS (
+    SELECT
+        UPPER(hp.player_name) AS selected_player_name,
+        hp.end_stack_amt AS selected_player_chips
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = :session_id
+      AND h.hand_num = :hand_num
+      AND LOWER(hp.player_name) = LOWER(:selected_player_name)  -- UI 선택
+)
 SELECT
-    (player->>'rank')::INTEGER AS rank,
-    player->>'player_name' AS name,
-    format_chips((player->>'chip_count')::BIGINT) AS chips,
-    format_bbs(
-        (player->>'chip_count')::BIGINT,
-        (SELECT (blind_structure->0->>'bb')::BIGINT FROM wsop_events WHERE id = s.event_id)
-    ) AS bbs,
-    -- country_code는 GFX JSON에 없음 → Manual DB에서 조회
-    COALESCE(mp.country_code, 'XX') AS country_code,
-    get_flag_path(COALESCE(mp.country_code, 'XX')) AS flag_path
-FROM wsop_standings s
-CROSS JOIN LATERAL jsonb_array_elements(s.standings) AS player
-LEFT JOIN manual_players mp ON LOWER(player->>'player_name') = LOWER(mp.name)
-WHERE s.event_id = :event_id
-  AND s.id = (
-      SELECT id FROM wsop_standings
-      WHERE event_id = :event_id
-      ORDER BY snapshot_at DESC
-      LIMIT 1
-  )
-ORDER BY (player->>'rank')::INTEGER
-LIMIT 9;
+    sp.selected_player_name,
+    format_chips(sp.selected_player_chips) AS selected_player_chips,
+    format_percent(sp.selected_player_chips::NUMERIC / tc.total) AS selected_player_percent,
+    format_chips(tc.total - sp.selected_player_chips) AS others_chips,
+    format_percent((tc.total - sp.selected_player_chips)::NUMERIC / tc.total) AS others_percent
+FROM selected_player sp, total_chips tc;
+```
+
+**Chip Flow 매핑 로직 (v2.0 신규):**
+
+```sql
+-- 같은 세션 내 플레이어의 10/20/30 핸드 히스토리
+WITH hand_sequence AS (
+    SELECT
+        h.hand_num,
+        hp.end_stack_amt AS chips,
+        ROW_NUMBER() OVER (ORDER BY h.hand_num DESC) AS rn
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = :session_id
+      AND LOWER(hp.player_name) = LOWER(:player_name)  -- UI 선택
+      AND hp.sitting_out = FALSE
+    ORDER BY h.hand_num DESC
+    LIMIT 30
+)
+SELECT
+    UPPER(:player_name) AS player_name,
+    -- 최근 10핸드 배열
+    ARRAY(SELECT chips FROM hand_sequence WHERE rn <= 10 ORDER BY rn DESC) AS chips_10h,
+    -- 최근 20핸드 배열
+    ARRAY(SELECT chips FROM hand_sequence WHERE rn <= 20 ORDER BY rn DESC) AS chips_20h,
+    -- 최근 30핸드 배열
+    ARRAY(SELECT chips FROM hand_sequence WHERE rn <= 30 ORDER BY rn DESC) AS chips_30h,
+    format_chips(MAX(chips)) AS max_label,
+    format_chips(MIN(chips)) AS min_label
+FROM hand_sequence;
 ```
 
 ---
 
-### 2.3 Payout 컴포지션 (9~12개 슬롯)
+### 3.2 payout (3개) - 상금표
 
-**대상 컴포지션**: `_Mini Payout`
+| # | 컴포지션 | 필드 키 | GFX 소스 | 슬롯 수 | 변환 |
+|---|----------|---------|----------|---------|------|
+| 1 | Payouts | rank, prize, **event_name** | wsop_events.payouts | **9** | format_currency |
+| 2 | Payouts 등수 바꾸기 가능 | rank, prize, **event_name**, **start_rank** | wsop_events.payouts | **11** | format_currency (v2.0 파라미터) |
+| 3 | _Mini Payout | name, prize, rank, **event_name** | gfx_sessions.payouts | **9** | format_currency |
 
-> **Note**: 실제 AEP 분석 결과 슬롯 수는 **9개** (일부 컴포지션 12개). (full_analysis.json 기준)
+> **v2.0.0 변경**: `event_name` 필드 추가 (wsop_events.event_name), `start_rank` 파라미터 추가
 
-#### 필드 매핑 테이블
-
-| AEP Field Key | 슬롯 수 | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|--------|---------------|---------|---------------|
-| `Rank 1~9` | 9 | `wsop_events` | `payouts[n].place` | **정렬**: `place` 오름차순. slot 1 = 1등 상금. **Case-Insensitive** |
-| `Name 1~9` | 9 | `wsop_standings` | `standings->>'player_name'` | 해당 순위 플레이어 이름. **Case-Insensitive** |
-| `prize 1~9` | 9 | `wsop_events` | `payouts[n].amount` | **정렬**: 동일. **변환**: `format_currency()`. **Case-Insensitive** |
-
-#### 특수 필드
-
-| AEP Layer Name | 용도 | 매핑 로직 |
-|----------------|------|-----------|
-| `Total Prize $...` | 총 상금 표시 | `wsop_events.prize_pool` 포맷팅 |
-
-#### 데이터 추출 쿼리
+**Payouts 매핑 로직:**
 
 ```sql
+-- Payouts: 1등부터 9등까지 + event_name
 SELECT
-    (payout->>'place')::INTEGER AS rank,
+    e.event_name,  -- v2.0 추가
+    (payout->>'place')::INTEGER AS slot_index,
+    (payout->>'place')::TEXT AS rank,
     format_currency((payout->>'amount')::BIGINT) AS prize
 FROM wsop_events e
 CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
@@ -181,727 +205,1512 @@ ORDER BY (payout->>'place')::INTEGER
 LIMIT 9;
 ```
 
----
-
-### 2.4 Player Info 컴포지션 (6개)
-
-**대상 컴포지션**: `NAME`, `NAME-DETAIL`, `Player Profile`
-
-#### 필드 매핑 테이블
-
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|---------------|---------|---------------|
-| `name` | `unified_players` | `display_name` | **우선순위**: Manual > WSOP+ > GFX. **조회**: `player_name` ILIKE 매칭 |
-| `name_korean` | `manual_players` | `name_korean` | **소스**: Manual DB 전용. **fallback**: 빈 문자열 |
-| `country` | `unified_players` | `country_name` | **조회**: unified_players 통합 뷰. 국가명 (영문) |
-| `country_flag` | `unified_players` | `country_code` | **변환**: ISO → Flag 경로. **fallback**: 'XX' (Unknown) |
-| `bracelets` | `wsop_players` | `wsop_bracelets` | **조회**: LEFT JOIN wsop_players. **fallback**: 0 |
-| `earnings` | `wsop_players` | `lifetime_earnings` | **변환**: `format_currency()` (cents → "$1,000,000"). **fallback**: "$0" |
-| `bio` | `manual_players` | `bio` | **소스**: Manual DB 전용. **fallback**: 빈 문자열 |
-
-#### 데이터 추출 쿼리
+**Payouts 등수 바꾸기 가능 매핑 로직 (v2.0 신규):**
 
 ```sql
+-- start_rank 파라미터로 시작 순위 지정, 내림차순 +9등까지 (최대 11슬롯)
+WITH ranked_payouts AS (
+    SELECT
+        e.event_name,
+        (payout->>'place')::INTEGER AS place,
+        (payout->>'amount')::BIGINT AS amount,
+        ROW_NUMBER() OVER (
+            ORDER BY (payout->>'place')::INTEGER
+        ) AS slot_index
+    FROM wsop_events e
+    CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
+    WHERE e.id = :event_id
+      AND (payout->>'place')::INTEGER >= :start_rank  -- 시작 순위 파라미터
+    ORDER BY (payout->>'place')::INTEGER
+    LIMIT 11
+)
 SELECT
-    up.display_name AS name,
-    mp.name_korean,
-    up.country_name AS country,
-    up.country_code,
-    get_flag_path(up.country_code) AS flag_path,
-    COALESCE(wp.wsop_bracelets, 0) AS bracelets,
-    COALESCE(format_currency(wp.lifetime_earnings), '$0') AS earnings,
-    mp.bio
-FROM unified_players up
-LEFT JOIN manual_players mp ON up.manual_player_id = mp.id
-LEFT JOIN wsop_players wp ON up.wsop_player_id = wp.id
-WHERE up.name ILIKE :player_name
-   OR mp.name_korean ILIKE :player_name
-LIMIT 1;
+    event_name,
+    slot_index,
+    place AS rank,
+    format_currency(amount) AS prize
+FROM ranked_payouts;
 ```
 
 ---
 
-### 2.5 Elimination 컴포지션 (고정 레이어)
+### 3.3 event_info (4개) - 이벤트 정보
 
-**대상 컴포지션**: `Elimination`
+| # | 컴포지션 | 필드 키 | GFX 소스 | 변환 |
+|---|----------|---------|----------|------|
+| 1 | Block Transition INFO | text_제목, text_내용_2줄 | wsop_events + 계산 | 직접 |
+| 2 | Event info | wsop_super_circuit_cyprus, buy-in, total_prize_pool, entrants, places_paid, buy_in_fee, total_fee | wsop_events | format_currency, format_number |
+| 3 | Event name | event_name (날짜 정보), wsop_super_circuit_cyprus (시리즈명) | wsop_events | 직접 |
+| 4 | Location | merit_royal_diamond_hotel | 정적/수동 | 직접 |
 
-> **⚠️ 구조 주의**: 슬롯 기반이 아닌 **고정 텍스트 레이어** 구조입니다.
+> **v2.0.0 변경**: Chips (Source Comp) 제외됨 (Source comp/ 폴더로 이동)
+>
+> **향후 변경 예정**: Block Transition INFO 컴포지션은 향후 버전에서 text_제목과 text_내용_2줄을 별도 컴포지션으로 분리할 예정
 
-#### 레이어 구조 (full_analysis.json 기준)
-
-| AEP Layer (예시) | 레이어 타입 | 매핑 데이터 |
-|------------------|------------|-------------|
-| `Turkey.png` | AVLayer (Flag) | 국가 코드 → Flag 이미지 경로 |
-| `Mehmet Dalkilic` | TextLayer | 플레이어 이름 (직접 텍스트 교체) |
-| `ELIMINATED IN 10TH PLACE ($64,600)` | TextLayer | **복합 필드**: 순위 + 상금 결합 |
-
-> **Note**: `rank`, `prize` 필드가 분리되지 않고 하나의 텍스트 레이어에 결합되어 있습니다.
-
-#### 매핑 로직
-
-| 데이터 | DB 소스 | 변환 로직 |
-|--------|---------|-----------|
-| 플레이어 이름 | `gfx_hand_players.player_name` | 직접 텍스트 교체 |
-| 국기 | `manual_players.country_code` | ISO → Flag 이미지 경로 |
-| 탈락 정보 | (계산) | `ELIMINATED IN {rank}TH PLACE (${prize})` 포맷 |
-
-#### 데이터 추출 쿼리
+**Event info 매핑 로직:**
 
 ```sql
 SELECT
-    hp.player_name AS name,
-    hp.elimination_rank AS rank,
-    format_currency((
-        SELECT (payout->>'amount')::BIGINT
-        FROM wsop_events e
-        CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
-        WHERE e.id = :event_id
-          AND (payout->>'place')::INTEGER = hp.elimination_rank
-        LIMIT 1
-    )) AS prize,
-    -- 탈락 정보 텍스트 생성
-    'ELIMINATED IN ' || hp.elimination_rank ||
-        CASE
-            WHEN hp.elimination_rank = 1 THEN 'ST'
-            WHEN hp.elimination_rank = 2 THEN 'ND'
-            WHEN hp.elimination_rank = 3 THEN 'RD'
-            ELSE 'TH'
-        END || ' PLACE (' || format_currency(...) || ')' AS elimination_text,
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag_path
+    e.event_name AS wsop_super_circuit_cyprus,  -- 대회 시리즈명 (예: 2025 WSOP SUPER CIRCUIT CYPRUS)
+    format_currency(e.buy_in) AS buy_in,         -- 바이인 (예: $5,000)
+    format_currency(e.prize_pool) AS total_prize_pool,  -- 총 상금 (예: $5,000,000)
+    format_number(e.total_entries) AS entrants,  -- 참가자 수 (예: 1,234)
+    e.places_paid::TEXT AS places_paid,          -- 인더머니 (예: 180)
+    format_currency(e.buy_in - e.rake) || ' + ' || format_currency(e.rake) AS buy_in_fee,  -- 바이인+수수료 분리
+    format_currency(e.buy_in) AS total_fee       -- 총 비용
+FROM wsop_events e
+WHERE e.id = :event_id;
+```
+
+**Event name 매핑 로직 (v2.0 필드 분리):**
+
+```sql
+-- event_name: 날짜 정보 (MAIN EVENT FINAL DAY / MAIN EVENT DAY 1)
+-- wsop_super_circuit_cyprus: 대회 시리즈명 (고정 또는 wsop_events)
+SELECT
+    e.event_day_name AS event_name,  -- "MAIN EVENT FINAL DAY"
+    e.event_name AS wsop_super_circuit_cyprus  -- "2025 WSOP SUPER CIRCUIT CYPRUS"
+FROM wsop_events e
+WHERE e.id = :event_id;
+```
+
+---
+
+### 3.4 schedule (1개) - 방송 일정
+
+| # | 컴포지션 | 필드 키 (슬롯) | GFX 소스 | 슬롯 정렬 | 변환 |
+|---|----------|----------------|----------|-----------|------|
+| 1 | Broadcast Schedule | broadcast_schedule, date 1~6, event 1~6, time 1~6, wsop_super_circuit_cyprus, event_name 1~6 | broadcast_sessions | broadcast_date ASC | format_date, format_time |
+
+**매핑 로직:**
+
+```sql
+SELECT
+    ROW_NUMBER() OVER (ORDER BY bs.broadcast_date, bs.scheduled_start) AS slot_index,
+    format_date(bs.broadcast_date) AS date,  -- "Jan 14"
+    format_time(bs.scheduled_start) AS time,  -- "05:30 PM"
+    bs.event_name AS event_name
+FROM broadcast_sessions bs
+WHERE bs.broadcast_date >= CURRENT_DATE
+ORDER BY bs.broadcast_date, bs.scheduled_start
+LIMIT 6;
+```
+
+---
+
+### 3.5 staff (2개) - 스태프
+
+| # | 컴포지션 | 필드 키 (슬롯) | GFX 소스 | 슬롯 수 | 변환 |
+|---|----------|----------------|----------|---------|------|
+| 1 | Commentator | name, sub, commentary, text_제목 | manual.commentators | **2** | 직접 |
+| 2 | Reporter | name, sub | manual.reporters | **2** | 직접 |
+
+**매핑 로직:**
+
+```sql
+SELECT
+    ROW_NUMBER() OVER () AS slot_index,
+    c.name,
+    c.social_handle AS sub
+FROM manual_commentators c
+WHERE c.event_id = :event_id
+LIMIT 2;
+```
+
+---
+
+### 3.6 player_info (4개) - 플레이어 정보
+
+| # | 컴포지션 | 필드 키 | 기본 소스 | Override | 변환 |
+|---|----------|---------|-----------|----------|------|
+| 1 | NAME | player_name, 국기, **chips**, **bbs** | gfx_hand_players | Manual | UPPER, format_chips, format_bbs, get_flag_path |
+| 2 | NAME 1줄 | player_name, **국기** | wsop+ (Manual) | - | 직접, get_flag_path |
+| 3 | NAME 2줄 (국기 빼고) | player_name, **chips**, **bbs** | gfx_hand_players | Manual | format_chips, format_bbs |
+| 4 | NAME 3줄+ | player_name, chips, bbs, **chips_N_hands_ago**, **vpip** | gfx_hand_players 히스토리 | Manual | format_chips, format_bbs (v2.0) |
+
+> **v2.0.0 변경**:
+> - NAME에 chips, bbs 필드 추가
+> - NAME 1줄에 국기 필드 추가 (wsop+)
+> - NAME 2줄에 chips, bbs 필드 추가 (국기 제외)
+> - NAME 3줄+에 히스토리 칩 및 vpip 필드 추가 (Chip Flow 연동)
+
+**NAME 매핑 로직 (v2.0 확장):**
+
+```sql
+-- NAME: player_name + 국기 + chips + bbs
+SELECT
+    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    COALESCE(mo.country_code, 'XX') AS country_code,
+    get_flag_path(COALESCE(mo.country_code, 'XX')) AS flag,
+    format_chips(hp.end_stack_amt) AS chips,  -- v2.0 추가
+    format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs  -- v2.0 추가
 FROM gfx_hand_players hp
-LEFT JOIN unified_players up ON hp.player_name = up.name
-WHERE hp.hand_id = :hand_id
-  AND hp.elimination_rank > 0
-LIMIT 1;
+JOIN gfx_hands h ON hp.hand_id = h.id
+LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```
 
----
-
-### 2.6 Event Info 컴포지션 (5개)
-
-**대상 컴포지션**: `Event info`, `Event info detail`
-
-#### 필드 매핑 테이블
-
-| AEP Field Key | DB 소스 테이블 | DB 컬럼 | 매핑 로직 상세 |
-|---------------|---------------|---------|---------------|
-| `event_name` | `wsop_events` | `event_name` | **조회**: event_id로 조회. 이벤트 전체 이름 |
-| `event_number` | `wsop_events` | `event_number` | **변환**: `'Event #' \|\| event_number` 접두사 추가 |
-| `buy_in` | `wsop_events` | `buy_in` | **변환**: `format_currency()` (cents → "$10,000") |
-| `entries` | `wsop_events` | `total_entries` | **변환**: `format_number()` (1000 → "1,000") |
-| `prize_pool` | `wsop_events` | `prize_pool` | **변환**: `format_currency()` (cents → "$10,000,000") |
-| `players_remaining` | `wsop_standings` | `players_remaining` | **조회**: 최신 snapshot. 현재 남은 플레이어 수 |
-| `blind_level` | `wsop_events` | `blind_structure` | **계산**: 현재 레벨 추출. **변환**: `format_blinds()` ("10K/20K (20K ante)") |
-
----
-
-### 2.7 Schedule 컴포지션 (1개)
-
-**대상 컴포지션**: `Broadcast Schedule`
-
-#### 필드 매핑 테이블
-
-| AEP Field Key | 슬롯 수 | DB 소스 | 매핑 로직 상세 |
-|---------------|--------|---------|---------------|
-| `date 1~20` | 20 | `broadcast_sessions.broadcast_date` | **정렬**: `broadcast_date ASC`. slot 1 = 가장 빠른 날짜. **변환**: `format_date()` ("Jan 14") |
-| `time 1~6` | 6 | `broadcast_sessions.scheduled_start` | **정렬**: `scheduled_start ASC`. slot 1 = 가장 이른 시간. **변환**: `format_time()` ("05:30 PM") |
-| `event_name 1~6` | 6 | `broadcast_sessions.event_name` | **정렬**: 동일. 해당 시간대의 이벤트 이름 |
-
----
-
-## 3. 국기 이미지 매핑
-
-### 3.1 매핑 규칙
-
-```
-country_code (ISO 3166-1 alpha-2) → aep_media_sources.file_path
-```
-
-### 3.2 매핑 함수
+**NAME 1줄 매핑 로직 (v2.0 국기 추가):**
 
 ```sql
--- ============================================================================
--- 함수: ISO 국가 코드 → AEP Flag 이미지 경로
--- ============================================================================
+-- NAME 1줄: player_name + 국기 (wsop+)
+SELECT
+    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    get_flag_path(COALESCE(mo.country_code, 'XX')) AS flag  -- v2.0 추가
+FROM gfx_hand_players hp
+LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
+```
 
-CREATE OR REPLACE FUNCTION get_flag_path(p_country_code VARCHAR(10))
+**NAME 2줄 (국기 빼고) 매핑 로직 (v2.0 chips/bbs 추가):**
+
+```sql
+-- NAME 2줄: player_name + chips + bbs (국기 제외)
+SELECT
+    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    format_chips(hp.end_stack_amt) AS chips,  -- v2.0 추가
+    format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs  -- v2.0 추가
+FROM gfx_hand_players hp
+JOIN gfx_hands h ON hp.hand_id = h.id
+LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
+```
+
+**NAME 3줄+ 매핑 로직 (v2.0 히스토리 추가):**
+
+```sql
+-- NAME 3줄+: player_name + chips + bbs + 히스토리 칩 + vpip
+WITH current_hand AS (
+    SELECT h.hand_num AS current_num, h.session_id
+    FROM gfx_hands h
+    WHERE h.id = :hand_id
+),
+historical_chips AS (
+    SELECT
+        (ch.current_num - h.hand_num) AS hands_ago,
+        hp.end_stack_amt AS chips
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    CROSS JOIN current_hand ch
+    WHERE h.session_id = ch.session_id
+      AND LOWER(hp.player_name) = LOWER(:player_name)
+      AND h.hand_num IN (
+          ch.current_num,
+          ch.current_num - 10,
+          ch.current_num - 20,
+          ch.current_num - 30
+      )
+)
+SELECT
+    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    format_chips(hp.end_stack_amt) AS chips,
+    format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs,
+    TO_CHAR(hp.vpip_percent, 'FM99.9') || '%' AS vpip,  -- v2.0 VPIP 통합
+    format_chips(MAX(CASE WHEN hc.hands_ago = 10 THEN hc.chips END)) AS chips_10_hands_ago,
+    format_chips(MAX(CASE WHEN hc.hands_ago = 20 THEN hc.chips END)) AS chips_20_hands_ago,
+    format_chips(MAX(CASE WHEN hc.hands_ago = 30 THEN hc.chips END)) AS chips_30_hands_ago
+FROM gfx_hand_players hp
+JOIN gfx_hands h ON hp.hand_id = h.id
+LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+LEFT JOIN historical_chips hc ON TRUE
+WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num
+GROUP BY hp.player_name, mo.corrected_name, hp.end_stack_amt, hp.vpip_percent, h.blinds;
+```
+
+**Manual Override 용도:**
+- `corrected_name`: 이름 오타 수정 (예: "PHILL IVEY" → "PHIL IVEY")
+- `country_code`: 국적 정보 추가 (GFX에는 없음)
+- `profile_image`: 프로필 이미지 경로
+
+---
+
+### 3.7 elimination (2개) - 탈락
+
+| # | 컴포지션 | 필드 키 | GFX 소스 | 변환 |
+|---|----------|---------|----------|------|
+| 1 | Elimination | name, rank, prize, 국기 | gfx_hand_players + wsop_events.payouts | format_currency, get_flag_path |
+| 2 | At Risk of Elimination | **player_name**, **rank**, **prize**, **flag** | gfx_hand_players + wsop_events | format_currency, get_flag_path (v2.0 필드 분리) |
+
+> **v2.0.0 변경**: At Risk of Elimination에서 text_내용 → player_name, rank, prize, flag 4개 필드로 분리
+
+**Elimination 매핑 로직:**
+
+```sql
+SELECT
+    UPPER(hp.player_name) AS name,
+    hp.elimination_rank AS rank,
+    format_currency(
+        (SELECT (payout->>'amount')::BIGINT FROM wsop_events e,
+         LATERAL jsonb_array_elements(e.payouts) AS payout
+         WHERE e.id = :event_id AND (payout->>'place')::INTEGER = hp.elimination_rank)
+    ) AS prize,
+    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
+FROM gfx_hand_players hp
+LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
+WHERE hp.elimination_rank > 0
+ORDER BY hp.elimination_rank;
+```
+
+**At Risk of Elimination 매핑 로직 (v2.0 필드 분리):**
+
+```sql
+-- 최소 스택 플레이어 = 탈락 위기
+WITH at_risk_player AS (
+    SELECT
+        hp.player_name,
+        hp.end_stack_amt,
+        ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt ASC) AS risk_rank
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = :session_id
+      AND h.hand_num = :hand_num
+      AND hp.sitting_out = FALSE
+    ORDER BY hp.end_stack_amt ASC
+    LIMIT 1
+),
+remaining_players AS (
+    SELECT COUNT(*) AS cnt
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = :session_id
+      AND h.hand_num = :hand_num
+      AND hp.sitting_out = FALSE
+)
+SELECT
+    UPPER(arp.player_name) AS player_name,  -- v2.0 분리
+    rp.cnt AS rank,  -- 현재 남은 인원 = 탈락 시 순위
+    format_currency(
+        (SELECT (payout->>'amount')::BIGINT
+         FROM wsop_events e
+         CROSS JOIN LATERAL jsonb_array_elements(e.payouts) AS payout
+         WHERE e.id = :event_id
+           AND (payout->>'place')::INTEGER = rp.cnt)
+    ) AS prize,  -- v2.0 분리
+    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag  -- v2.0 분리
+FROM at_risk_player arp
+CROSS JOIN remaining_players rp
+LEFT JOIN unified_players up ON LOWER(arp.player_name) = LOWER(up.name);
+```
+
+---
+
+### 3.8 transition (2개) - 전환 화면
+
+| # | 컴포지션 | 필드 키 | 소스 | 비고 |
+|---|----------|---------|------|------|
+| 1 | 1-NEXT STREAM STARTING SOON | wsop_vlogger_program, https://... | 정적 | 고정 텍스트 |
+| 2 | (기타) | - | - | - |
+
+---
+
+### 3.9 other (4개) - 기타
+
+| # | 컴포지션 | 필드 키 | 소스 | 비고 |
+|---|----------|---------|------|------|
+| 1 | 1-Hand-for-hand play is currently in progress | event_#12:... | 정적 | 고정 텍스트 |
+| 2-4 | (기타) | - | - | - |
+
+---
+
+## 4. 슬롯 인덱스 결정 규칙
+
+### 4.1 공통 정렬 기준
+
+| 카테고리 | 정렬 기준 | 예시 |
+|----------|-----------|------|
+| chip_display | end_stack_amt DESC | 칩 1위 → Name 1 |
+| payout | place ASC | 1등 → Prize 1 |
+| schedule | broadcast_date ASC | 첫 날짜 → Date 1 |
+| staff | 입력 순서 | 첫 번째 → Name 1 |
+
+### 4.2 sitting_out 처리
+
+- `gfx_hand_players.sitting_out = TRUE` 플레이어 제외
+- 빈 슬롯은 빈 문자열("")로 전송
+
+---
+
+## 5. 데이터 변환 함수 DDL
+
+```sql
+-- 칩 포맷팅: 1500000 → "1,500,000"
+CREATE FUNCTION format_chips(amount BIGINT) RETURNS TEXT AS $$
+    SELECT TO_CHAR(amount, 'FM999,999,999,999')
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- BB 포맷팅: (chips, bb) → "75.0"
+CREATE FUNCTION format_bbs(chips BIGINT, bb BIGINT) RETURNS TEXT AS $$
+    SELECT TO_CHAR(chips::NUMERIC / NULLIF(bb, 0), 'FM999,999.9')
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- 통화 포맷팅: cents → "$15,000"
+CREATE FUNCTION format_currency(amount BIGINT) RETURNS TEXT AS $$
+    SELECT '$' || TO_CHAR(amount / 100, 'FM999,999,999')
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- 날짜 포맷팅: 2026-01-14 → "Jan 14"
+CREATE FUNCTION format_date(d DATE) RETURNS TEXT AS $$
+    SELECT TO_CHAR(d, 'Mon DD')
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- 시간 포맷팅: 17:30 → "05:30 PM"
+CREATE FUNCTION format_time(t TIME) RETURNS TEXT AS $$
+    SELECT TO_CHAR(t, 'HH:MI AM')
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- 블라인드 포맷팅: (10000, 20000, 20000) → "10K/20K (20K)"
+CREATE FUNCTION format_blinds(sb BIGINT, bb BIGINT, ante BIGINT) RETURNS TEXT AS $$
+    SELECT format_chips_short(sb) || '/' || format_chips_short(bb) ||
+           CASE WHEN ante > 0 THEN ' (' || format_chips_short(ante) || ')' ELSE '' END
+$$ LANGUAGE SQL IMMUTABLE;
+
+-- 국기 경로: "KR" → "Flag/Korea.png"
+CREATE FUNCTION get_flag_path(country_code VARCHAR) RETURNS TEXT AS $$
+    SELECT COALESCE(
+        (SELECT file_path FROM aep_media_sources WHERE category = 'Flag' AND country_code = UPPER($1)),
+        'Flag/Unknown.png'
+    )
+$$ LANGUAGE SQL STABLE;
+
+-- v2.0.0 신규: 퍼센트 포맷팅: 0.354 → "35.4%"
+CREATE OR REPLACE FUNCTION format_percent(value NUMERIC)
 RETURNS TEXT AS $$
-DECLARE
-    v_path TEXT;
 BEGIN
-    SELECT file_path INTO v_path
-    FROM aep_media_sources
-    WHERE country_code = UPPER(p_country_code)
-      AND category = 'Flag'
+    IF value IS NULL THEN
+        RETURN '0%';
+    END IF;
+    RETURN TO_CHAR(value * 100, 'FM999.9') || '%';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- v2.0.0 신규: N핸드 전 칩 조회 함수
+CREATE OR REPLACE FUNCTION get_chips_n_hands_ago(
+    p_session_id BIGINT,
+    p_current_hand_num INTEGER,
+    p_player_name TEXT,
+    p_n_hands INTEGER
+) RETURNS BIGINT AS $$
+DECLARE
+    v_chips BIGINT;
+BEGIN
+    SELECT hp.end_stack_amt INTO v_chips
+    FROM gfx_hand_players hp
+    JOIN gfx_hands h ON hp.hand_id = h.id
+    WHERE h.session_id = p_session_id
+      AND h.hand_num = p_current_hand_num - p_n_hands
+      AND LOWER(hp.player_name) = LOWER(p_player_name)
     LIMIT 1;
 
-    -- 기본값: Unknown 국기
-    RETURN COALESCE(v_path, 'Flag/Unknown.png');
+    RETURN v_chips;
 END;
 $$ LANGUAGE plpgsql STABLE;
 ```
 
-### 3.3 주요 국기 매핑 (270개 중 일부)
-
-| country_code | country_name | AEP 파일 경로 |
-|--------------|--------------|---------------|
-| KR | Korea | Flag/Korea.png |
-| US | United States | Flag/United States.png |
-| CA | Canada | Flag/Canada.png |
-| GB | United Kingdom | Flag/United Kingdom.png |
-| DE | Germany | Flag/Germany.png |
-| FR | France | Flag/France.png |
-| JP | Japan | Flag/Japan.png |
-| CN | China | Flag/China.png |
-| AU | Australia | Flag/Australia.png |
-| BR | Brazil | Flag/Brazil.png |
-| MX | Mexico | Flag/Mexico.png |
-| ES | Spain | Flag/Spain.png |
-| IT | Italy | Flag/Italy.png |
-| NL | Netherlands | Flag/Netherlands.png |
-| SE | Sweden | Flag/Sweden.png |
-| NO | Norway | Flag/Norway.png |
-| FI | Finland | Flag/Finland.png |
-| DK | Denmark | Flag/Denmark.png |
-| XX | Unknown | Flag/Unknown.png |
-
 ---
 
-## 4. 데이터 변환 함수
+## 6. gfx_aep_field_mappings 테이블
 
-### 4.1 숫자 포맷팅 (칩 스택)
+### 6.1 스키마
 
 ```sql
--- ============================================================================
--- 함수: 칩 스택 포맷팅
--- 입력: 1500000 → 출력: "1,500,000"
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION format_chips(amount BIGINT)
-RETURNS TEXT AS $$
-BEGIN
-    IF amount IS NULL THEN
-        RETURN '0';
-    END IF;
-    RETURN TO_CHAR(amount, 'FM999,999,999,999');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+CREATE TABLE gfx_aep_field_mappings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    composition_name VARCHAR(255) NOT NULL,
+    composition_category aep_category NOT NULL,
+    target_field_key VARCHAR(100) NOT NULL,
+    slot_range_start INTEGER,
+    slot_range_end INTEGER,
+    source_table VARCHAR(100) NOT NULL,
+    source_column VARCHAR(100) NOT NULL,
+    source_join TEXT,
+    transform VARCHAR(50),
+    slot_order_by VARCHAR(100),
+    slot_filter TEXT,
+    priority INTEGER DEFAULT 100,
+    UNIQUE(composition_name, target_field_key)
+);
 ```
 
-### 4.2 통화 포맷팅 (상금)
+### 6.2 초기 데이터 예시
 
 ```sql
--- ============================================================================
--- 함수: 통화 포맷팅 (cents → dollars)
--- 입력: 100000000 (cents) → 출력: "$1,000,000"
--- ============================================================================
+INSERT INTO gfx_aep_field_mappings VALUES
+-- _MAIN Mini Chip Count: 실제 AEP 슬롯 수 = 8
+('_MAIN Mini Chip Count', 'chip_display', 'name', 1, 8,
+ 'gfx_hand_players', 'player_name', NULL, 'UPPER',
+ 'end_stack_amt DESC', 'sitting_out = FALSE', 100),
 
-CREATE OR REPLACE FUNCTION format_currency(amount_cents BIGINT)
-RETURNS TEXT AS $$
-BEGIN
-    IF amount_cents IS NULL OR amount_cents = 0 THEN
-        RETURN '$0';
-    END IF;
-    RETURN '$' || TO_CHAR(amount_cents / 100, 'FM999,999,999');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-```
+('_MAIN Mini Chip Count', 'chip_display', 'chips', 1, 8,
+ 'gfx_hand_players', 'end_stack_amt', NULL, 'format_chips',
+ 'end_stack_amt DESC', 'sitting_out = FALSE', 100),
 
-### 4.3 BB 스택 계산
-
-```sql
--- ============================================================================
--- 함수: BB 스택 계산
--- 입력: chips=1500000, bb=20000 → 출력: "75.0"
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION format_bbs(chips BIGINT, big_blind BIGINT)
-RETURNS TEXT AS $$
-BEGIN
-    IF chips IS NULL OR big_blind IS NULL OR big_blind = 0 THEN
-        RETURN '0';
-    END IF;
-    RETURN TO_CHAR(chips::NUMERIC / big_blind, 'FM999,999.9');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-```
-
-### 4.4 날짜 포맷팅
-
-```sql
--- ============================================================================
--- 함수: 날짜 포맷팅
--- 입력: 2026-01-14 → 출력: "Jan 14"
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION format_date(d DATE)
-RETURNS TEXT AS $$
-BEGIN
-    IF d IS NULL THEN
-        RETURN '';
-    END IF;
-    RETURN TO_CHAR(d, 'Mon DD');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-```
-
-### 4.5 시간 포맷팅
-
-```sql
--- ============================================================================
--- 함수: 시간 포맷팅
--- 입력: 17:30:00 → 출력: "05:30 PM"
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION format_time(t TIME)
-RETURNS TEXT AS $$
-BEGIN
-    IF t IS NULL THEN
-        RETURN '';
-    END IF;
-    RETURN TO_CHAR(t, 'HH:MI AM');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-```
-
-### 4.6 블라인드 레벨 포맷팅
-
-```sql
--- ============================================================================
--- 함수: 블라인드 레벨 포맷팅
--- 입력: sb=10000, bb=20000, ante=20000 → 출력: "10K/20K (20K ante)"
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION format_blinds(sb BIGINT, bb BIGINT, ante BIGINT DEFAULT 0)
-RETURNS TEXT AS $$
-DECLARE
-    v_result TEXT;
-BEGIN
-    v_result := format_chips_short(sb) || '/' || format_chips_short(bb);
-    IF ante > 0 THEN
-        v_result := v_result || ' (' || format_chips_short(ante) || ' ante)';
-    END IF;
-    RETURN v_result;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
-
--- 보조 함수: 짧은 칩 포맷 (K/M)
-CREATE OR REPLACE FUNCTION format_chips_short(amount BIGINT)
-RETURNS TEXT AS $$
-BEGIN
-    IF amount >= 1000000 THEN
-        RETURN TO_CHAR(amount / 1000000.0, 'FM999.9') || 'M';
-    ELSIF amount >= 1000 THEN
-        RETURN TO_CHAR(amount / 1000.0, 'FM999.9') || 'K';
-    ELSE
-        RETURN amount::TEXT;
-    END IF;
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
+-- Payouts: 실제 AEP 슬롯 수 = 9
+('Payouts', 'payout', 'rank', 1, 9,
+ 'wsop_events', 'payouts->place', NULL, 'direct',
+ 'place ASC', NULL, 100);
 ```
 
 ---
 
-## 5. 렌더 큐 데이터 구조
+## 7. 렌더링 큐 gfx_data 스키마 v3
 
-### 5.1 render_queue.gfx_data JSONB 스키마
+> **v2.0.0 업그레이드**: render_gfx_data_v2 → render_gfx_data_v3
+> - `chip_comparison` 구조 추가 (선택 플레이어 백분율)
+> - `chip_flow` 구조 추가 (10/20/30 핸드 배열)
+> - `player_history` 구조 추가 (히스토리 칩)
+> - `at_risk` 구조 추가 (필드 분리)
+> - `payouts` 구조에 event_name, start_rank 추가
 
 ```json
 {
-  "$schema": "render_gfx_data_v1",
+  "$schema": "render_gfx_data_v3",
+  "version": "3.0.0",
+  "comp_name": "_MAIN Mini Chip Count",
+  "render_type": "chip_count",
+
+  "slots": [
+    {
+      "slot_index": 1,
+      "fields": {
+        "name": "PHIL IVEY",
+        "chips": "1,500,000",
+        "bbs": "75.0",
+        "rank": "1",
+        "flag": "Flag/United States.png"
+      }
+    }
+  ],
+
+  "single_fields": {
+    "event_name": "MAIN EVENT FINAL DAY",
+    "wsop_super_circuit_cyprus": "2025 WSOP SUPER CIRCUIT CYPRUS"
+  },
+
+  "chip_comparison": {
+    "selected_player_name": "PHIL IVEY",
+    "selected_player_chips": "1,500,000",
+    "selected_player_percent": "35.4%",
+    "others_chips": "2,735,000",
+    "others_percent": "64.6%"
+  },
+
+  "chip_flow": {
+    "player_name": "PHIL IVEY",
+    "chips_10h": [1500000, 1480000, 1450000, 1420000, 1400000, 1380000, 1350000, 1320000, 1300000, 1280000],
+    "chips_20h": [1500000, 1480000, 1450000, "...최근 20핸드"],
+    "chips_30h": [1500000, 1480000, 1450000, "...최근 30핸드"],
+    "max_label": "1,620,000",
+    "min_label": "1,200,000"
+  },
+
+  "player_history": {
+    "current_chips": 1500000,
+    "chips_10_hands_ago": 1380000,
+    "chips_20_hands_ago": 1250000,
+    "chips_30_hands_ago": 1100000,
+    "chip_change_10h": "+120,000",
+    "chip_change_20h": "+250,000",
+    "chip_change_30h": "+400,000"
+  },
+
+  "at_risk": {
+    "player_name": "JOHN DOE",
+    "rank": 9,
+    "prize": "$82,000",
+    "flag": "Flag/United States.png"
+  },
+
+  "payouts": {
+    "event_name": "MAIN EVENT - FINAL TABLE",
+    "start_rank": 1,
+    "entries": [
+      {"slot_index": 1, "rank": "1", "prize": "$1,000,000"},
+      {"slot_index": 2, "rank": "2", "prize": "$670,000"}
+    ]
+  },
+
+  "metadata": {
+    "session_id": 638677842396130000,
+    "hand_num": 42,
+    "event_id": "uuid-event-id",
+    "blind_level": "10K/20K",
+    "data_sources": ["gfx_hand_players", "wsop_events", "unified_players"],
+    "generated_at": "2026-01-14T10:35:00Z",
+    "schema_version": "3.0.0"
+  }
+}
+```
+
+---
+
+## 8. 컴포지션 카테고리 요약 (26개)
+
+| 카테고리 | v1.3.0 | v2.0.0 | 동적 매핑 | 주요 소스 | 실제 슬롯 수 |
+|----------|--------|--------|-----------|-----------|--------------|
+| chip_display | 7 | **6** | ✅ | gfx_hand_players | 9, 9, 3, 4, 0, 0 |
+| payout | 3 | 3 | ✅ | wsop_events | 9, 11, 9 |
+| event_info | 5 | **4** | ✅ | wsop_events, gfx_sessions | - |
+| schedule | 1 | 1 | ✅ | broadcast_sessions | 6 |
+| staff | 2 | 2 | ✅ | manual.commentators | 2, 2 |
+| player_info | 4 | 4 | ✅ | gfx_hand_players + Manual | - |
+| elimination | 2 | 2 | ✅ | gfx_hand_players | - |
+| transition | 2 | 2 | ❌ | 정적 | - |
+| other | 2 | 2 | ❌ | 정적 | - |
+| **Total** | **28** | **26** | - | - | - |
+
+> **v2.0.0 변경**:
+> - chip_display: 7 → 6개 (Chip VPIP → NAME 3줄+로 통합)
+> - event_info: 5 → 4개 (Chips (Source Comp) 제외)
+
+> ⚠️ **제외된 카테고리**:
+> - `leaderboard` (3개): Comp/ 폴더 위치로 범위 외
+> - `element` (14개): Source comp/ 폴더 위치로 범위 외
+> - `Chips (Source Comp)` (1개): v2.0.0 제외 (Source comp/ 폴더로 이동)
+
+---
+
+## 9. 관련 문서
+
+| 문서 | 위치 | 설명 |
+|------|------|------|
+| GFX Pipeline Architecture | `docs/GFX_PIPELINE_ARCHITECTURE.md` | 5계층 파이프라인 아키텍처 |
+| 08-GFX-AEP-Mapping | `automation_schema/docs/08-GFX-AEP-Mapping.md` | 참조 문서 (병행 유지) |
+| WSOP+ DB Schema | `automation_schema/docs/WSOP+ DB.md` | WSOP+ 데이터베이스 스키마 |
+| Manual DB Schema | `automation_schema/docs/Manual DB.md` | Manual 오버라이드 스키마 |
+
+---
+
+## 10. 검증 방법
+
+1. **28개 컴포지션별 field_keys 매핑 완료 확인**
+2. **SQL 함수 DDL 문법 검증**
+3. **JSON Schema 유효성 확인**
+4. **샘플 데이터로 렌더링 테스트**
+5. **실제 AEP 슬롯 수와 매핑 일치 확인** (03_text_layers.json 기준)
+
+---
+
+## 11. 데이터 흐름 다이어그램
+
+### 11.1 전체 파이프라인 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    GFX JSON → DB → AEP 전체 데이터 흐름                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│   PokerGFX       │     │   PostgreSQL     │     │   After Effects  │
+│   JSON 파일      │────▶│   테이블 저장    │────▶│   컴포지션       │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+        │                        │                        │
+        ▼                        ▼                        ▼
+┌──────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+│ • ID (GameID)    │     │ • gfx_sessions   │     │ • 28개 컴포지션  │
+│ • EventTitle     │     │ • gfx_hands      │     │ • 텍스트 레이어  │
+│ • Hands[]        │     │ • gfx_hand_players│    │ • 슬롯 기반 매핑 │
+│ • Players[]      │     │ • unified_players │    │                  │
+└──────────────────┘     └──────────────────┘     └──────────────────┘
+```
+
+### 11.2 chip_display 카테고리 데이터 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               _MAIN Mini Chip Count 데이터 흐름 (9 슬롯)                      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ GFX JSON 원본 (PokerGFX 출력)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "Hands": [{
+    "HandNum": 42,
+    "FlopDrawBlinds": {
+      "BigBlind_Amt": 20000        ─────────────────────────┐
+    },                                                      │
+    "Players": [                                            │
+      {                                                     │
+        "PlayerNum": 1,                                     │
+        "Name": "Phil",           ──────────────────┐       │
+        "LongName": "Phil Ivey",                    │       │
+        "EndStackAmt": 1620000,   ──────────────────┼───┐   │
+        "VPIP_Percent": 45.5                        │   │   │
+      }                                             │   │   │
+    ]                                               │   │   │
+  }]                                                │   │   │
+}                                                   │   │   │
+                                                    │   │   │
+           │ gfx_json_parser                        │   │   │
+           ▼                                        │   │   │
+                                                    │   │   │
+2️⃣ DB 저장                                         │   │   │
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━         │   │   │
+┌─────────────────────────────────────────┐        │   │   │
+│ gfx_hand_players                        │        │   │   │
+├─────────────────────────────────────────┤        │   │   │
+│ seat_num: 1                             │        │   │   │
+│ player_name: "Phil"         ◀───────────┘       │   │
+│ end_stack_amt: 1620000      ◀───────────────────┘   │
+│ sitting_out: FALSE                                  │
+└─────────────────────────────────────────┘           │
+                                                      │
+┌─────────────────────────────────────────┐           │
+│ gfx_hands                               │           │
+├─────────────────────────────────────────┤           │
+│ blinds: {"big_blind_amt": 20000}  ◀─────────────────┘
+└─────────────────────────────────────────┘
+
+           │ SQL 쿼리 + 변환 함수
+           │ UPPER(), format_chips(), format_bbs()
+           ▼
+
+3️⃣ AEP 필드 출력 (render_queue.gfx_data)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "comp_name": "_MAIN Mini Chip Count",
+  "slots": [
+    {
+      "slot_index": 1,
+      "fields": {
+        "name": "PHIL",           ← UPPER(player_name)
+        "chips": "1,620,000",     ← format_chips(end_stack_amt)
+        "bbs": "81.0",            ← format_bbs(1620000, 20000)
+        "rank": "1",              ← ROW_NUMBER()
+        "flag": "Flag/United States.png"  ← get_flag_path(country_code)
+      }
+    }
+  ]
+}
+```
+
+### 11.3 payout 카테고리 데이터 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Payouts 데이터 흐름 (9 슬롯)                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ GFX JSON / WSOP+ DB
+━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "Payouts": [1000000, 670000, 475000, ...]  ← gfx_sessions.payouts (정수 배열)
+}
+
+-- 또는 wsop_events (JSONB)
+{
+  "payouts": [
+    {"place": 1, "amount": 100000000},  ← cents 단위
+    {"place": 2, "amount": 67000000},
+    ...
+  ]
+}
+
+           │ 배열 인덱스 = place - 1
+           ▼
+
+2️⃣ DB 조회
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SELECT (payout->>'place')::INTEGER AS rank,
+       format_currency((payout->>'amount')::BIGINT) AS prize
+FROM wsop_events e,
+     LATERAL jsonb_array_elements(e.payouts) AS payout
+ORDER BY (payout->>'place')
+LIMIT 9;
+
+           │ format_currency()
+           │ 100000000 → "$1,000,000"
+           ▼
+
+3️⃣ AEP 필드 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "comp_name": "Payouts",
+  "slots": [
+    {"slot_index": 1, "fields": {"rank": "1", "prize": "$1,000,000"}},
+    {"slot_index": 2, "fields": {"rank": "2", "prize": "$670,000"}},
+    ...
+  ]
+}
+```
+
+### 11.4 schedule 카테고리 데이터 흐름
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 Broadcast Schedule 데이터 흐름 (6 슬롯)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ broadcast_sessions 테이블
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+| broadcast_date | scheduled_start | event_name              |
+|----------------|-----------------|-------------------------|
+| 2026-01-14     | 17:30:00        | Main Event Day 1        |
+| 2026-01-15     | 14:00:00        | Main Event Day 2        |
+| 2026-01-16     | 18:00:00        | Final Table             |
+
+           │ format_date(), format_time()
+           ▼
+
+2️⃣ 변환 결과
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+| date     | time      | event_name        |
+|----------|-----------|-------------------|
+| "Jan 14" | "05:30 PM"| "Main Event Day 1"|
+| "Jan 15" | "02:00 PM"| "Main Event Day 2"|
+
+           │ 슬롯 인덱스 매핑
+           ▼
+
+3️⃣ AEP 필드 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "comp_name": "Broadcast Schedule",
+  "slots": [
+    {
+      "slot_index": 1,
+      "fields": {
+        "date": "Jan 14",           ← Date 1
+        "time": "05:30 PM",         ← Time 1
+        "event_name": "Main Event Day 1"  ← Event Name 1
+      }
+    }
+  ]
+}
+```
+
+### 11.5 Chip Comparison 데이터 흐름 (v2.0 신규)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 Chip Comparison 데이터 흐름 (v2.0.0)                          │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ UI에서 플레이어 선택
+━━━━━━━━━━━━━━━━━━━━━━━━
+   :selected_player_name = "Phil Ivey"
+
+2️⃣ 전체 칩 계산
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─────────────────────────────────────────┐
+│ gfx_hand_players (현재 핸드)              │
+├─────────────────────────────────────────┤
+│ Phil Ivey:    1,500,000 (35.4%)  ← 선택  │
+│ Negreanu:       800,000 (18.9%)         │
+│ Voronin:        735,000 (17.4%)         │
+│ Lipauka:        700,000 (16.5%)         │
+│ Others:         500,000 (11.8%)         │
+│ ─────────────────────────────────       │
+│ Total:        4,235,000 (100%)          │
+└─────────────────────────────────────────┘
+
+           │ 백분율 계산
+           │ format_percent()
+           ▼
+
+3️⃣ AEP 필드 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "chip_comparison": {
+    "selected_player_name": "PHIL IVEY",
+    "selected_player_chips": "1,500,000",
+    "selected_player_percent": "35.4%",
+    "others_chips": "2,735,000",
+    "others_percent": "64.6%"
+  }
+}
+```
+
+### 11.6 Chip Flow 데이터 흐름 (v2.0 신규)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    Chip Flow 데이터 흐름 (v2.0.0)                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ UI에서 플레이어 선택
+━━━━━━━━━━━━━━━━━━━━━━━━
+   :player_name = "Phil Ivey"
+   :session_id, :current_hand_num 파라미터 전달
+
+2️⃣ 히스토리 쿼리 실행
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─────────────────────────────────────────┐
+│ gfx_hand_players (같은 세션, 같은 플레이어) │
+├─────────────────────────────────────────┤
+│ Hand 42: chips = 1,500,000 (현재)        │
+│ Hand 41: chips = 1,480,000              │
+│ Hand 40: chips = 1,450,000              │
+│ Hand 39: chips = 1,420,000              │
+│ ...                                     │
+│ Hand 32: chips = 1,380,000 (10핸드 전)   │
+│ ...                                     │
+│ Hand 22: chips = 1,250,000 (20핸드 전)   │
+│ ...                                     │
+│ Hand 12: chips = 1,100,000 (30핸드 전)   │
+└─────────────────────────────────────────┘
+
+           │ 배열 생성
+           ▼
+
+3️⃣ 배열 데이터 생성
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+chips_10h = [1500000, 1480000, 1450000, 1420000, 1400000, 1380000, ...]  (10개)
+chips_20h = [1500000, 1480000, 1450000, ...]  (20개)
+chips_30h = [1500000, 1480000, 1450000, ...]  (30개)
+
+           │ format_chips()
+           ▼
+
+4️⃣ AEP 필드 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "chip_flow": {
+    "player_name": "PHIL IVEY",
+    "chips_10h": [1500000, 1480000, 1450000, ...],
+    "chips_20h": [...],
+    "chips_30h": [...],
+    "max_label": "1,620,000",
+    "min_label": "1,100,000"
+  }
+}
+```
+
+### 11.7 NAME 3줄+ 히스토리 데이터 흐름 (v2.0 신규)
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                 NAME 3줄+ 히스토리 데이터 흐름 (v2.0.0)                         │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+1️⃣ 현재 핸드 + 히스토리 조회
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   현재 핸드 #42, 플레이어 "Phil Ivey"
+
+2️⃣ 특정 시점 칩 조회
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+┌─────────────────────────────────────────┐
+│ Hand #42 (현재): 1,500,000              │
+│ Hand #32 (10핸드 전): 1,380,000         │
+│ Hand #22 (20핸드 전): 1,250,000         │
+│ Hand #12 (30핸드 전): 1,100,000         │
+└─────────────────────────────────────────┘
+
+           │ 변화량 계산
+           ▼
+
+3️⃣ AEP 필드 출력
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+{
+  "player_history": {
+    "current_chips": 1500000,
+    "chips_10_hands_ago": 1380000,
+    "chips_20_hands_ago": 1250000,
+    "chips_30_hands_ago": 1100000,
+    "chip_change_10h": "+120,000",
+    "chip_change_20h": "+250,000",
+    "chip_change_30h": "+400,000"
+  }
+}
+```
+
+---
+
+## 12. 필드별 상세 매핑 명세
+
+### 12.1 chip_display 카테고리
+
+#### 12.1.1 _MAIN Mini Chip Count (9 슬롯)
+
+**슬롯 필드 매핑:**
+
+| AEP 필드 | GFX JSON 경로 | DB 컬럼 | 변환 함수 | 예시 입력 | 예시 출력 |
+|----------|---------------|---------|-----------|-----------|-----------|
+| `Name {N}` | `Players[].Name` | `gfx_hand_players.player_name` | `UPPER()` | `"Phil"` | `"PHIL"` |
+| `Chip {N}` | `Players[].EndStackAmt` | `gfx_hand_players.end_stack_amt` | `format_chips()` | `1620000` | `"1,620,000"` |
+| (BB 표시) | `FlopDrawBlinds.BigBlind_Amt` | `gfx_hands.blinds->>'big_blind_amt'` | `format_bbs()` | `(1620000, 20000)` | `"81.0"` |
+
+**고정 필드:**
+
+| AEP 필드 | 값 | 계산 방식 |
+|----------|-----|-----------|
+| `AVERAGE STACK : {value}` | 동적 | `AVG(end_stack_amt) / big_blind_amt` → `"1,200,000 (60BB)"` |
+| `chips` | `"chips (BB)"` | 고정 헤더 |
+| `player` | `"players"` | 고정 헤더 |
+
+#### 12.1.2 _SUB_Mini Chip Count (9 슬롯)
+
+| AEP 필드 | GFX JSON 경로 | DB 컬럼 | 변환 | 예시 |
+|----------|---------------|---------|------|------|
+| `Name {N}` | `Players[].Name` | `player_name` | `UPPER()` | `"VORONIN"` |
+| `Chips {N}` | `Players[].EndStackAmt` | `end_stack_amt` | `format_chips()` | `"1,625,000"` |
+
+> 📝 **참고**: _MAIN과 _SUB 모두 9슬롯으로 동일 (빈 슬롯 포함)
+
+#### 12.1.3 Chips In Play x3/x4 (3/4 슬롯)
+
+| AEP 필드 | 소스 | 계산 | 예시 |
+|----------|------|------|------|
+| `chips_in_play` | `SUM(end_stack_amt)` | 전체 칩 합산 | `"15,000,000"` |
+| `fee {N}` | 칩 단위 | 각 단계별 칩 값 | `"100"`, `"500"`, `"1000"` |
+
+#### 12.1.4 Chip Comparison (슬롯 없음, UI 선택 기반) - v2.0 업데이트
+
+| AEP 필드 | 설명 | 계산 | 예시 |
+|----------|------|------|------|
+| `selected_player_name` | UI 선택 플레이어명 | UPPER() | `"PHIL IVEY"` |
+| `selected_player_chips` | 선택 플레이어 칩 | format_chips() | `"1,500,000"` |
+| `selected_player_percent` | 선택 플레이어 비율 | 선택 칩 / 전체 칩 * 100 | `"35.4%"` |
+| `others_chips` | 나머지 플레이어 칩 합 | format_chips() | `"2,735,000"` |
+| `others_percent` | 나머지 플레이어 비율 | 나머지 칩 / 전체 칩 * 100 | `"64.6%"` |
+
+> **v2.0.0 변경**: 직접 입력 → UI 선택 기반 자동 계산
+
+#### 12.1.5 Chip Flow (슬롯 없음, 히스토리 배열) - v2.0 업데이트
+
+| AEP 필드 | 설명 | 계산 | 예시 |
+|----------|------|------|------|
+| `player_name` | UI 선택 플레이어명 | UPPER() | `"PHIL IVEY"` |
+| `chips_10h[]` | 최근 10핸드 칩 배열 | 히스토리 조회 | `[1500000, 1480000, ...]` |
+| `chips_20h[]` | 최근 20핸드 칩 배열 | 히스토리 조회 | `[1500000, ...]` |
+| `chips_30h[]` | 최근 30핸드 칩 배열 | 히스토리 조회 | `[1500000, ...]` |
+| `max_label` | 최고점 레이블 | format_chips(MAX) | `"1,620,000"` |
+| `min_label` | 최저점 레이블 | format_chips(MIN) | `"1,100,000"` |
+
+> **v2.0.0 변경**: 단일 기간 → 10/20/30 핸드 동시 수집
+
+#### 12.1.6 Chip VPIP - NAME 3줄+로 통합
+
+> **v2.0.0 변경**: Chip VPIP 컴포지션 → NAME 3줄+ 컴포지션 내 `vpip` 필드로 통합
+>
+> 상세 내용은 **12.6 player_info 카테고리** 섹션 참조
+
+---
+
+### 12.2 payout 카테고리
+
+#### 12.2.1 Payouts (9 슬롯) - v2.0 업데이트
+
+| AEP 필드 | GFX JSON 경로 | DB 컬럼 | 변환 | 예시 입력 | 예시 출력 |
+|----------|---------------|---------|------|-----------|-----------|
+| `event_name` | - | `wsop_events.event_name` | 직접 | - | `"MAIN EVENT"` |
+| `Rank {N}` | 배열 인덱스 + 1 | `place` | 직접 | `1` | `"1"` |
+| `prize {N}` | `Payouts[N-1]` 또는 `payouts[].amount` | `amount` | `format_currency()` | `100000000` | `"$1,000,000"` |
+| `total_prize` | `SUM(payouts)` | - | `format_currency()` | - | `"$5,000,000"` |
+
+> **v2.0.0 변경**: `event_name` 필드 추가 (wsop_events.event_name)
+
+#### 12.2.2 Payouts 등수 바꾸기 가능 (11 슬롯) - v2.0 업데이트
+
+| AEP 필드 | 설명 | 예시 |
+|----------|------|------|
+| `event_name` | 이벤트명 (wsop+) | `"MAIN EVENT"` |
+| `start_rank` | 시작 순위 (파라미터) | `5` (5등부터 시작) |
+| `Rank {N}` | start_rank + N - 1 | `"5"`, `"6"`, `"7"`, ... |
+| `prize {N}` | 해당 순위 상금 | `"$250,000"`, `"$185,000"`, ... |
+
+> **v2.0.0 변경**: `start_rank` 파라미터 추가 (지정 순위부터 내림차순 +9등까지)
+
+#### 12.2.3 _Mini Payout (9 슬롯) - v2.0 업데이트
+
+| AEP 필드 | 소스 | 변환 | 예시 |
+|----------|------|------|------|
+| `event_name` | `wsop_events.event_name` | 직접 | `"MAIN EVENT"` |
+| `name {N}` | `gfx_hand_players` | `UPPER()` | `"LIPAUKA"` |
+| `chips {N}` | `end_stack_amt` | `format_chips()` | `"2,225,000"` |
+| `rank {N}` | 계산 (칩 순위) | 직접 | `"1"` |
+| `prize {N}` | `gfx_sessions.payouts[rank-1]` | `format_currency()` | `"$1,000,000"` |
+
+> **v2.0.0 변경**: `event_name` 필드 추가
+
+---
+
+### 12.3 event_info 카테고리
+
+#### 12.3.1 Event info (단일 컴포지션)
+
+| AEP 필드 | DB 테이블.컬럼 | 변환 | 예시 출력 |
+|----------|----------------|------|-----------|
+| `event_info` | - | 고정 헤더 | `"EVENT INFO"` |
+| `wsop_super_circuit_cyprus` | - | 고정 | `"2025 WSOP SUPER CIRCUIT CYPRUS"` |
+| `buy-in` | `wsop_events.buy_in` | `format_currency()` | `"$5,000"` |
+| `total_prize_pool` | `wsop_events.prize_pool` | `format_currency()` | `"$5,000,000"` |
+| `entrants` | `wsop_events.total_entries` | `format_number()` | `"1,234"` |
+| `places_paid` | `wsop_events.places_paid` | 직접 | `"180"` |
+| `buy_in_fee` | 계산 | - | `"$4,500 + $500"` |
+| `total_fee` | 계산 | - | `"$5,000"` |
+| `%` | `places_paid / total_entries * 100` | - | `"14.6%"` |
+| `num` | `places_paid` | - | `"180"` |
+
+#### 12.3.2 Event name - v2.0 필드 분리
+
+| AEP 필드 | DB 소스 | 설명 | 예시 |
+|----------|---------|------|------|
+| `event_name` | `wsop_events.event_day_name` | 날짜 정보 | `"MAIN EVENT FINAL DAY"` |
+| `wsop_super_circuit_cyprus` | `wsop_events.event_name` | 대회 시리즈명 | `"2025 WSOP SUPER CIRCUIT CYPRUS"` |
+
+> **v2.0.0 변경**: 단일 필드 → `event_name` (날짜 정보) + `wsop_super_circuit_cyprus` (시리즈명) 분리
+
+---
+
+### 12.4 schedule 카테고리
+
+#### 12.4.1 Broadcast Schedule (6 슬롯)
+
+| AEP 필드 | DB 컬럼 | 변환 | 예시 입력 | 예시 출력 |
+|----------|---------|------|-----------|-----------|
+| `Date {N}` | `broadcast_sessions.broadcast_date` | `format_date()` | `2026-01-14` | `"Jan 14"` |
+| `Time {N}` | `broadcast_sessions.scheduled_start` | `format_time()` | `17:30:00` | `"05:30 PM"` |
+| `Event Name {N}` | `broadcast_sessions.event_name` | 직접 | - | `"Main Event Day 1"` |
+
+**고정 필드:**
+
+| AEP 필드 | 값 |
+|----------|-----|
+| `broadcast_schedule` | `"BROADCAST SCHEDULE"` |
+| `wsop_super_circuit_cyprus` | `"2025 WSOP SUPER CIRCUIT CYPRUS"` |
+
+---
+
+### 12.5 staff 카테고리
+
+#### 12.5.1 Commentator (2 슬롯)
+
+| AEP 필드 | DB 컬럼 | 예시 |
+|----------|---------|------|
+| `Name {N}` | `manual_commentators.name` | `"Jeff Platt"` |
+| `Sub {N}` | `manual_commentators.social_handle` | `"@jeffplatt"` |
+| `commentary` | 고정 | `"COMMENTARY"` |
+| `text_제목` | 고정 | `"COMMENTATORS"` |
+
+#### 12.5.2 Reporter (2 슬롯)
+
+| AEP 필드 | DB 컬럼 | 예시 |
+|----------|---------|------|
+| `Name {N}` | `manual_reporters.name` | `"Kara Scott"` |
+| `Sub {N}` | `manual_reporters.social_handle` | `"@karascott"` |
+| `text_제목` | 고정 | `"REPORTER"` |
+
+---
+
+### 12.6 player_info 카테고리 - v2.0 업데이트
+
+#### 12.6.1 NAME (국기 포함) - v2.0 확장
+
+| AEP 필드 | 기본 소스 | Override | 변환 | 예시 |
+|----------|-----------|----------|------|------|
+| `name` | `gfx_hand_players.player_name` | `manual_player_overrides.corrected_name` | UPPER() | `"PHIL IVEY"` |
+| `chips` | `gfx_hand_players.end_stack_amt` | - | format_chips() | `"1,500,000"` |
+| `bbs` | 계산 | - | format_bbs() | `"75.0"` |
+| 국기 이미지 | - | `manual_player_overrides.country_code` | get_flag_path() | `"Flag/United States.png"` |
+
+> **v2.0.0 변경**: `chips`, `bbs` 필드 추가
+
+#### 12.6.2 NAME 1줄 - v2.0 국기 추가
+
+| AEP 필드 | 소스 | 변환 | 예시 |
+|----------|------|------|------|
+| `name` | `gfx_hand_players.player_name` | UPPER() | `"PHIL IVEY"` |
+| 국기 이미지 | `manual_player_overrides.country_code` | get_flag_path() | `"Flag/United States.png"` |
+
+> **v2.0.0 변경**: 국기 필드 추가 (wsop+)
+
+#### 12.6.3 NAME 2줄 (국기 빼고) - v2.0 확장
+
+| AEP 필드 | 소스 | 변환 | 예시 |
+|----------|------|------|------|
+| `name` | `gfx_hand_players.player_name` | UPPER() | `"PHIL IVEY"` |
+| `chips` | `gfx_hand_players.end_stack_amt` | format_chips() | `"1,500,000"` |
+| `bbs` | 계산 | format_bbs() | `"75.0"` |
+
+> **v2.0.0 변경**: `chips`, `bbs` 필드 추가 (국기 제외)
+
+#### 12.6.4 NAME 3줄+ - v2.0 히스토리 추가
+
+| AEP 필드 | 소스 | 변환 | 예시 |
+|----------|------|------|------|
+| `name` | `gfx_hand_players.player_name` | UPPER() | `"PHIL IVEY"` |
+| `chips` | `gfx_hand_players.end_stack_amt` | format_chips() | `"1,500,000"` |
+| `bbs` | 계산 | format_bbs() | `"75.0"` |
+| `vpip` | `gfx_hand_players.vpip_percent` | 직접 | `"45.5%"` |
+| `chips_10_hands_ago` | 히스토리 조회 | format_chips() | `"1,380,000"` |
+| `chips_20_hands_ago` | 히스토리 조회 | format_chips() | `"1,250,000"` |
+| `chips_30_hands_ago` | 히스토리 조회 | format_chips() | `"1,100,000"` |
+
+> **v2.0.0 변경**:
+> - Chip VPIP 컴포지션에서 `vpip` 필드 통합
+> - Chip Flow와 연동되는 히스토리 칩 필드 추가 (10/20/30 핸드 전)
+
+**Override 우선순위:**
+```
+COALESCE(manual_player_overrides.corrected_name, gfx_hand_players.player_name)
+```
+
+---
+
+### 12.7 elimination 카테고리 - v2.0 업데이트
+
+#### 12.7.1 Elimination
+
+| AEP 필드 | GFX JSON 경로 | DB 컬럼 | 변환 | 예시 |
+|----------|---------------|---------|------|------|
+| `name` | `gfx_hand_players.player_name` | - | UPPER() | `"JOHN DOE"` |
+| `rank` | `gfx_hand_players.elimination_rank` | - | 직접 | `"9"` |
+| `prize` | `wsop_events.payouts` | - | format_currency() | `"$82,000"` |
+| `flag` | `manual_player_overrides.country_code` | - | get_flag_path() | `"Flag/United States.png"` |
+
+**SQL 쿼리:**
+```sql
+-- elimination_rank > 0 인 플레이어 조회
+SELECT
+    UPPER(hp.player_name) AS name,
+    hp.elimination_rank AS rank,
+    format_currency(
+        (SELECT (payout->>'amount')::BIGINT FROM wsop_events e,
+         LATERAL jsonb_array_elements(e.payouts) AS payout
+         WHERE e.id = :event_id AND (payout->>'place')::INTEGER = hp.elimination_rank)
+    ) AS prize,
+    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
+FROM gfx_hand_players hp
+LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
+WHERE hp.elimination_rank > 0
+ORDER BY hp.elimination_rank DESC
+LIMIT 1;
+```
+
+#### 12.7.2 At Risk of Elimination - v2.0 필드 분리
+
+| AEP 필드 | 계산 | 예시 |
+|----------|------|------|
+| `player_name` | 최소 스택 플레이어명 | `"JOHN DOE"` |
+| `rank` | 현재 남은 인원 (= 탈락 시 순위) | `9` |
+| `prize` | 해당 순위 상금 | `"$82,000"` |
+| `flag` | 플레이어 국기 | `"Flag/United States.png"` |
+
+> **v2.0.0 변경**: `text_내용` 결합 → `player_name`, `rank`, `prize`, `flag` 4개 필드로 분리
+
+---
+
+### 12.8 transition 카테고리 (정적)
+
+| 컴포지션 | 필드 | 값 | 비고 |
+|----------|------|-----|------|
+| 1-NEXT STREAM STARTING SOON | `wsop_vlogger_program` | 고정 텍스트 | 수동 편집 |
+| Block Transition Level-Blinds | `level`, `blinds`, `duration` | 블라인드 정보 | gfx_hands.blinds 기반 |
+
+---
+
+### 12.9 other 카테고리 (정적)
+
+| 컴포지션 | 필드 | 값 |
+|----------|------|-----|
+| 1-Hand-for-hand play | `event_#12:...` | 수동 트리거 시 표시 |
+
+---
+
+## 13. NULL/에러 처리 전략
+
+### 13.1 필드별 기본값 정의
+
+| 카테고리 | 필드 | NULL 시 기본값 | 사유 |
+|----------|------|---------------|------|
+| chip_display | `name` | `""` (빈 문자열) | 슬롯 비우기 |
+| chip_display | `chips` | `""` | 슬롯 비우기 |
+| chip_display | `bbs` | `""` | 슬롯 비우기 |
+| chip_display | `flag` | `"Flag/Unknown.png"` | 기본 국기 이미지 |
+| payout | `rank` | `"-"` | 표시 안함 |
+| payout | `prize` | `"$0"` | 0원 표시 |
+| schedule | `date` | `""` | 슬롯 비우기 |
+| schedule | `time` | `""` | 슬롯 비우기 |
+| staff | `name` | `""` | 슬롯 비우기 |
+| staff | `sub` | `""` | 소셜 핸들 없음 |
+| player_info | `country_code` | `"XX"` | Unknown 국가 코드 |
+| elimination | `rank` | 필수 | NULL 불가 - 에러 처리 |
+| elimination | `prize` | `"$0"` | 상금 정보 없음 |
+
+### 13.2 폴백 전략
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    데이터 소스 폴백 순서                          │
+├─────────────────────────────────────────────────────────────────┤
+│                                                                 │
+│  player_name 예시:                                              │
+│                                                                 │
+│  1️⃣ gfx_hand_players.player_name                               │
+│     └─ "Phil"                                                   │
+│                     │                                           │
+│                     ▼ NULL 또는 오타 시                          │
+│                                                                 │
+│  2️⃣ manual_player_overrides.corrected_name                     │
+│     └─ "Phil Ivey" (수정된 이름)                                │
+│                     │                                           │
+│                     ▼ NULL 시                                   │
+│                                                                 │
+│  3️⃣ 기본값                                                      │
+│     └─ "" (빈 문자열)                                            │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────┐
+│                    country_code 폴백                             │
+├─────────────────────────────────────────────────────────────────┤
+│  1️⃣ manual_player_overrides.country_code  ← 유일한 소스         │
+│  2️⃣ 기본값: "XX" (Unknown)                                      │
+│  3️⃣ 국기 경로: "Flag/Unknown.png"                               │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### 13.3 변환 함수 NULL 안전 버전
+
+```sql
+-- format_chips: NULL 및 음수 처리
+CREATE OR REPLACE FUNCTION format_chips_safe(amount BIGINT)
+RETURNS TEXT AS $$
+BEGIN
+    IF amount IS NULL OR amount < 0 THEN
+        RETURN '';
+    END IF;
+    RETURN TO_CHAR(amount, 'FM999,999,999,999');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN '';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- format_bbs: 0 나누기 방지
+CREATE OR REPLACE FUNCTION format_bbs_safe(chips BIGINT, bb BIGINT)
+RETURNS TEXT AS $$
+BEGIN
+    IF chips IS NULL OR bb IS NULL OR bb = 0 THEN
+        RETURN '';
+    END IF;
+    RETURN TO_CHAR(chips::NUMERIC / bb, 'FM999,999.9');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN '';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
+-- format_currency: NULL 처리
+CREATE OR REPLACE FUNCTION format_currency_safe(amount BIGINT)
+RETURNS TEXT AS $$
+BEGIN
+    IF amount IS NULL THEN
+        RETURN '$0';
+    END IF;
+    RETURN '$' || TO_CHAR(amount / 100, 'FM999,999,999');
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN '$0';
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+```
+
+### 13.4 에러 로깅
+
+| 에러 유형 | 심각도 | 조치 |
+|----------|--------|------|
+| 필수 필드 NULL | ERROR | 렌더링 중단, 알림 발송 |
+| 변환 함수 오류 | WARNING | 기본값 사용, 로그 기록 |
+| 국기 이미지 없음 | INFO | Unknown.png 사용 |
+| 슬롯 초과 데이터 | WARNING | LIMIT으로 자르기 |
+
+---
+
+## 14. 실제 데이터 예시
+
+### 14.1 GFX JSON 원본 샘플
+
+**파일**: `PGFX_live_data_export GameID=638677842396130000.json`
+
+```json
+{
+  "ID": 638677842396130000,
+  "CreatedDateTimeUTC": "2026-01-14T10:30:00Z",
+  "EventTitle": "WSOP SUPER CIRCUIT CYPRUS - MAIN EVENT",
+  "Type": "FEATURE_TABLE",
+  "Payouts": [1000000, 670000, 475000, 345000, 250000, 185000, 140000, 107500, 82000],
+  "Hands": [
+    {
+      "HandNum": 42,
+      "Duration": "PT35.2477537S",
+      "StartDateTimeUTC": "2026-01-14T10:30:45.123Z",
+      "FlopDrawBlinds": {
+        "Ante_Type": "BB_ANTE_BB1ST",
+        "BigBlind_Amt": 20000,
+        "SmallBlind_Amt": 10000,
+        "Button_PlayerNum": 1
+      },
+      "Players": [
+        {
+          "PlayerNum": 1,
+          "Name": "Lipauka",
+          "LongName": "Justas Lipauka",
+          "HoleCards": ["As", "Kh"],
+          "StartStackAmt": 2100000,
+          "EndStackAmt": 2225000,
+          "CumulativeWinningsAmt": 125000,
+          "VPIP_Percent": 35.5,
+          "PFR_Percent": 28.0,
+          "EliminationRank": -1
+        },
+        {
+          "PlayerNum": 2,
+          "Name": "Voronin",
+          "LongName": "Konstantin Voronin",
+          "HoleCards": [""],
+          "StartStackAmt": 1500000,
+          "EndStackAmt": 1625000,
+          "CumulativeWinningsAmt": 125000,
+          "VPIP_Percent": 42.0,
+          "EliminationRank": -1
+        }
+      ]
+    }
+  ]
+}
+```
+
+### 14.2 DB 저장 후 데이터
+
+**gfx_sessions:**
+```
+| session_id         | event_title                              | payouts                                    |
+|--------------------|------------------------------------------|-------------------------------------------|
+| 638677842396130000 | WSOP SUPER CIRCUIT CYPRUS - MAIN EVENT   | {1000000,670000,475000,345000,250000,...} |
+```
+
+**gfx_hands:**
+```
+| id     | session_id         | hand_num | blinds                                              |
+|--------|--------------------| ---------|-----------------------------------------------------|
+| uuid-1 | 638677842396130000 | 42       | {"big_blind_amt":20000,"small_blind_amt":10000,...} |
+```
+
+**gfx_hand_players:**
+```
+| hand_id | seat_num | player_name | end_stack_amt | vpip_percent | sitting_out | elimination_rank |
+|---------|----------|-------------|---------------|--------------|-------------|------------------|
+| uuid-1  | 1        | Lipauka     | 2225000       | 35.5         | FALSE       | -1               |
+| uuid-1  | 2        | Voronin     | 1625000       | 42.0         | FALSE       | -1               |
+```
+
+### 14.3 AEP 출력 데이터 (render_queue.gfx_data)
+
+**_MAIN Mini Chip Count 컴포지션:**
+
+```json
+{
   "comp_name": "_MAIN Mini Chip Count",
   "render_type": "chip_count",
   "slots": [
     {
       "slot_index": 1,
       "fields": {
-        "name": "Phil Ivey",
-        "chips": "1,500,000",
+        "name": "LIPAUKA",
+        "chips": "2,225,000",
+        "bbs": "111.3",
         "rank": "1",
-        "bbs": "75.0",
-        "country_code": "US",
-        "flag_path": "Flag/United States.png"
+        "flag": "Flag/Lithuania.png"
       }
     },
     {
       "slot_index": 2,
       "fields": {
-        "name": "Daniel Negreanu",
-        "chips": "1,200,000",
+        "name": "VORONIN",
+        "chips": "1,625,000",
+        "bbs": "81.3",
         "rank": "2",
-        "bbs": "60.0",
-        "country_code": "CA",
-        "flag_path": "Flag/Canada.png"
+        "flag": "Flag/Russia.png"
       }
     }
   ],
+  "single_fields": {
+    "wsop_super_circuit_cyprus": "2025 WSOP SUPER CIRCUIT CYPRUS",
+    "AVERAGE STACK": "1,925,000 (96BB)"
+  },
   "metadata": {
-    "event_id": "uuid",
-    "event_name": "WSOP Main Event",
-    "session_id": 123456789,
+    "session_id": 638677842396130000,
     "hand_num": 42,
     "blind_level": "10K/20K",
-    "players_remaining": 50,
-    "timestamp": "2026-01-14T10:30:00Z"
+    "generated_at": "2026-01-14T10:35:00Z",
+    "data_sources": ["gfx_hand_players", "gfx_hands", "unified_players"]
   }
 }
 ```
 
-### 5.2 렌더 타입별 스키마
-
-| render_type | slots 구조 | 필수 metadata |
-|-------------|-----------|---------------|
-| `chip_count` | name, chips, rank, bbs, flag | session_id, hand_num, blind_level |
-| `leaderboard` | name, chips, rank, bbs, flag | event_id, players_remaining |
-| `payout` | rank, prize, percentage | event_id |
-| `player_info` | name, country, bracelets, earnings | player_id |
-| `elimination` | name, rank, prize, flag | hand_id, elimination_rank |
-| `event_info` | event_name, buy_in, entries, prize_pool | event_id |
-
----
-
-## 6. 예제 쿼리
-
-### 6.1 Chip Count 렌더 데이터 생성
-
-```sql
--- ============================================================================
--- Chip Count 렌더링용 데이터 추출
--- ============================================================================
-
-WITH chip_data AS (
-    SELECT
-        ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt DESC) AS slot_index,
-        hp.player_name,
-        hp.end_stack_amt,
-        (h.blinds->>'big_blind_amt')::BIGINT AS big_blind,
-        COALESCE(up.country_code, 'XX') AS country_code
-    FROM gfx_hand_players hp
-    JOIN gfx_hands h ON hp.hand_id = h.id
-    LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
-    WHERE h.session_id = :session_id
-      AND h.hand_num = :hand_num
-      AND hp.sitting_out = FALSE
-    ORDER BY hp.end_stack_amt DESC
-    LIMIT 16
-)
-SELECT jsonb_build_object(
-    'comp_name', '_MAIN Mini Chip Count',
-    'render_type', 'chip_count',
-    'slots', jsonb_agg(
-        jsonb_build_object(
-            'slot_index', slot_index,
-            'fields', jsonb_build_object(
-                'name', player_name,
-                'chips', format_chips(end_stack_amt),
-                'rank', slot_index::TEXT,
-                'bbs', format_bbs(end_stack_amt, big_blind),
-                'country_code', country_code,
-                'flag_path', get_flag_path(country_code)
-            )
-        )
-    ),
-    'metadata', jsonb_build_object(
-        'session_id', :session_id,
-        'hand_num', :hand_num,
-        'timestamp', NOW()
-    )
-) AS gfx_data
-FROM chip_data;
-```
-
-### 6.2 Leaderboard 렌더 데이터 생성
-
-```sql
--- ============================================================================
--- Leaderboard 렌더링용 데이터 추출
--- ============================================================================
-
-WITH standings_data AS (
-    SELECT
-        (player->>'rank')::INTEGER AS slot_index,
-        player->>'player_name' AS player_name,
-        (player->>'chip_count')::BIGINT AS chip_count,
-        (player->>'stack_in_bbs')::NUMERIC AS stack_in_bbs,
-        COALESCE(player->>'country_code', 'XX') AS country_code
-    FROM wsop_standings s
-    CROSS JOIN LATERAL jsonb_array_elements(s.standings) AS player
-    WHERE s.event_id = :event_id
-      AND s.snapshot_at = (
-          SELECT MAX(snapshot_at) FROM wsop_standings WHERE event_id = :event_id
-      )
-    ORDER BY (player->>'rank')::INTEGER
-    LIMIT 30
-)
-SELECT jsonb_build_object(
-    'comp_name', 'Feature Table Leaderboard MAIN',
-    'render_type', 'leaderboard',
-    'slots', jsonb_agg(
-        jsonb_build_object(
-            'slot_index', slot_index,
-            'fields', jsonb_build_object(
-                'name', player_name,
-                'chips', format_chips(chip_count),
-                'rank', slot_index::TEXT,
-                'bbs', TO_CHAR(stack_in_bbs, 'FM999.9'),
-                'country_code', country_code,
-                'flag_path', get_flag_path(country_code)
-            )
-        )
-    ),
-    'metadata', jsonb_build_object(
-        'event_id', :event_id,
-        'timestamp', NOW()
-    )
-) AS gfx_data
-FROM standings_data;
-```
-
-### 6.3 렌더 큐에 작업 추가
-
-```sql
--- ============================================================================
--- 렌더 큐에 Chip Count 작업 추가
--- ============================================================================
-
-INSERT INTO render_queue (
-    render_type,
-    aep_project,
-    aep_comp_name,
-    gfx_data,
-    data_hash,
-    output_format,
-    output_resolution,
-    priority,
-    status
-)
-SELECT
-    'chip_count',
-    'CyprusDesign.aep',
-    '_MAIN Mini Chip Count',
-    gfx_data,
-    md5(gfx_data::TEXT),
-    'mp4',
-    '1920x1080',
-    100,
-    'pending'
-FROM (
-    -- 위의 Chip Count 쿼리 실행
-    SELECT ... AS gfx_data
-) data
-WHERE NOT EXISTS (
-    -- 캐시 히트 체크
-    SELECT 1 FROM render_queue
-    WHERE data_hash = md5(data.gfx_data::TEXT)
-      AND status = 'completed'
-);
-```
-
----
-
-## 7. 슬롯 인덱스 규칙
-
-### 7.1 AEP 레이어 네이밍 패턴
-
-```
-{field_key} {slot_index}
-
-예시:
-- "Name 1", "Name 2", ... "Name 30"
-- "Chips 1", "Chips 2", ... "Chips 19"
-- "Rank 1", "Rank 2", ... "Rank 25"
-```
-
-### 7.2 슬롯 인덱스 매핑
-
-| 데이터 순서 | AEP 슬롯 | 설명 |
-|------------|---------|------|
-| 1st (chips 최다) | slot 1 | 1위 |
-| 2nd | slot 2 | 2위 |
-| 3rd | slot 3 | 3위 |
-| ... | ... | ... |
-| 30th | slot 30 | 30위 |
-
-### 7.3 빈 슬롯 처리
+**Payouts 컴포지션:**
 
 ```json
 {
-  "slot_index": 17,
-  "fields": {
-    "name": "",
-    "chips": "",
-    "rank": "",
-    "bbs": "",
-    "flag_path": ""
+  "comp_name": "Payouts",
+  "render_type": "payout",
+  "slots": [
+    {"slot_index": 1, "fields": {"rank": "1", "prize": "$1,000,000"}},
+    {"slot_index": 2, "fields": {"rank": "2", "prize": "$670,000"}},
+    {"slot_index": 3, "fields": {"rank": "3", "prize": "$475,000"}},
+    {"slot_index": 4, "fields": {"rank": "4", "prize": "$345,000"}},
+    {"slot_index": 5, "fields": {"rank": "5", "prize": "$250,000"}},
+    {"slot_index": 6, "fields": {"rank": "6", "prize": "$185,000"}},
+    {"slot_index": 7, "fields": {"rank": "7", "prize": "$140,000"}},
+    {"slot_index": 8, "fields": {"rank": "8", "prize": "$107,500"}},
+    {"slot_index": 9, "fields": {"rank": "9", "prize": "$82,000"}}
+  ],
+  "single_fields": {
+    "wsop_super_circuit_cyprus": "2025 WSOP SUPER CIRCUIT CYPRUS",
+    "payouts": "PAYOUTS",
+    "total_prize": "$4,254,500"
   }
 }
 ```
 
-### 7.4 슬롯 할당 규칙
+### 14.4 변환 과정 추적 예시
 
-각 컴포지션별 슬롯 할당 규칙 정의:
-
-> **Note**: 모든 필드 키는 **Case-Insensitive** 매핑됩니다.
-
-#### Chip Display (name 1~9)
-
-| 항목 | 값 |
-|------|-----|
-| **정렬 기준** | `end_stack_amt DESC` (칩 스택 내림차순) |
-| **slot 1** | 가장 많은 칩 보유자 (칩 리더) |
-| **slot 9** | 9번째로 많은 칩 보유자 |
-| **제외 조건** | `sitting_out = TRUE` |
-| **최대 슬롯** | 9 |
-| **필드 매칭** | `name`, `Name` 모두 매칭 (Case-Insensitive) |
-
-#### Leaderboard (Name 1~9)
-
-| 항목 | 값 |
-|------|-----|
-| **정렬 기준** | WSOP+ API `rank` 필드 오름차순 |
-| **slot 1** | 전체 1위 |
-| **slot 9** | 전체 9위 |
-| **데이터 소스** | `wsop_standings.standings` JSONB |
-| **최대 슬롯** | 9 |
-| **참고** | Date 필드 = 순위 번호, BBs 슬롯 없음 |
-
-#### Payout (Rank 1~9)
-
-| 항목 | 값 |
-|------|-----|
-| **정렬 기준** | `place ASC` (순위 오름차순) |
-| **slot 1** | 1등 상금 |
-| **slot 9** | 9등 상금 |
-| **데이터 소스** | `wsop_events.payouts[]` JSONB |
-| **최대 슬롯** | 9 (일부 컴포지션 12) |
-
-#### Schedule (date 1~20, time 1~6)
-
-| 항목 | 값 |
-|------|-----|
-| **정렬 기준** | `broadcast_date ASC`, `scheduled_start ASC` |
-| **slot 1** | 가장 빠른 날짜/시간 |
-| **데이터 소스** | `broadcast_sessions` |
-| **최대 슬롯** | date: 20, time: 6 |
-
----
-
-## 7.5 레이어 이름 매칭 규칙
-
-### 7.5.1 Case-Insensitive 매핑
-
-AEP 템플릿의 레이어 이름은 대소문자가 일관되지 않으므로, 매핑 로직에서 **대소문자를 무시**하고 매칭합니다.
-
-| 필드 패턴 | 매칭되는 레이어 예시 |
-|-----------|---------------------|
-| `name` | `name 1`, `Name 4`, `NAME 5` |
-| `chip` | `Chip 1`, `chip 2`, `chips 3` |
-| `rank` | `Rank 1`, `rank 2` |
-| `flag` | `Flag 1`, `flag 2` |
-
-### 7.5.2 매핑 함수 (PostgreSQL)
-
-```sql
--- ============================================================================
--- 함수: 레이어 이름 패턴 매칭 (Case-Insensitive)
--- 입력: layer_name='Name 4', field_pattern='name' → 출력: TRUE
--- ============================================================================
-
-CREATE OR REPLACE FUNCTION match_layer_pattern(
-    layer_name TEXT,
-    field_pattern TEXT
-) RETURNS BOOLEAN AS $$
-BEGIN
-    -- 대소문자 무시하고 "패턴 + 공백 + 숫자" 형태 매칭
-    RETURN LOWER(layer_name) ~ ('^' || LOWER(field_pattern) || ' \d+$');
-END;
-$$ LANGUAGE plpgsql IMMUTABLE;
 ```
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    "Lipauka" → "LIPAUKA" 변환 추적                          │
+├───────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│  1. GFX JSON 입력                                                         │
+│     "Name": "Lipauka"                                                     │
+│                                                                           │
+│  2. DB 저장 (gfx_hand_players)                                            │
+│     player_name: "Lipauka"                                                │
+│                                                                           │
+│  3. Manual Override 체크                                                   │
+│     SELECT corrected_name FROM manual_player_overrides                    │
+│     WHERE original_name = 'lipauka'                                       │
+│     → NULL (오버라이드 없음)                                               │
+│                                                                           │
+│  4. SQL 변환                                                              │
+│     UPPER(COALESCE(mo.corrected_name, hp.player_name))                    │
+│     = UPPER("Lipauka")                                                    │
+│     = "LIPAUKA"                                                           │
+│                                                                           │
+│  5. AEP 출력                                                              │
+│     "name": "LIPAUKA"                                                     │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
 
-### 7.5.3 Python 매핑 로직
-
-```python
-import re
-
-def match_layer(layer_name: str, field_key: str) -> bool:
-    """레이어 이름이 필드 키 패턴과 일치하는지 확인 (Case-Insensitive)"""
-    pattern = rf'^{re.escape(field_key)}\s+\d+$'
-    return bool(re.match(pattern, layer_name, re.IGNORECASE))
-
-def extract_slot_index(layer_name: str, field_key: str) -> int | None:
-    """레이어 이름에서 슬롯 인덱스 추출"""
-    pattern = rf'^{re.escape(field_key)}\s+(\d+)$'
-    match = re.match(pattern, layer_name, re.IGNORECASE)
-    return int(match.group(1)) if match else None
+┌───────────────────────────────────────────────────────────────────────────┐
+│                    2225000 → "2,225,000" (111.3BB) 변환 추적               │
+├───────────────────────────────────────────────────────────────────────────┤
+│                                                                           │
+│  1. GFX JSON 입력                                                         │
+│     "EndStackAmt": 2225000                                                │
+│     "FlopDrawBlinds.BigBlind_Amt": 20000                                  │
+│                                                                           │
+│  2. DB 저장                                                               │
+│     gfx_hand_players.end_stack_amt: 2225000                               │
+│     gfx_hands.blinds->>'big_blind_amt': 20000                             │
+│                                                                           │
+│  3. SQL 변환                                                              │
+│     format_chips(2225000) = "2,225,000"                                   │
+│     format_bbs(2225000, 20000) = "111.3"                                  │
+│                                                                           │
+│  4. AEP 출력                                                              │
+│     "chips": "2,225,000"                                                  │
+│     "bbs": "111.3"                                                        │
+│                                                                           │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
-
----
-
-## 8. 마이그레이션
-
-### 8.1 함수 추가 마이그레이션
-
-```sql
--- Migration: 08_gfx_aep_mapping_functions
-
--- 1. format_chips
-CREATE OR REPLACE FUNCTION format_chips(amount BIGINT) ...;
-
--- 2. format_currency
-CREATE OR REPLACE FUNCTION format_currency(amount_cents BIGINT) ...;
-
--- 3. format_bbs
-CREATE OR REPLACE FUNCTION format_bbs(chips BIGINT, big_blind BIGINT) ...;
-
--- 4. format_date
-CREATE OR REPLACE FUNCTION format_date(d DATE) ...;
-
--- 5. format_time
-CREATE OR REPLACE FUNCTION format_time(t TIME) ...;
-
--- 6. format_blinds
-CREATE OR REPLACE FUNCTION format_blinds(sb BIGINT, bb BIGINT, ante BIGINT) ...;
-
--- 7. format_chips_short
-CREATE OR REPLACE FUNCTION format_chips_short(amount BIGINT) ...;
-
--- 8. get_flag_path
-CREATE OR REPLACE FUNCTION get_flag_path(p_country_code VARCHAR(10)) ...;
-```
-
----
-
-## 9. 검증 체크리스트
-
-### 9.1 데이터 무결성
-
-- [ ] 모든 플레이어에 country_code 존재 확인
-- [ ] 모든 country_code가 Flag 이미지와 매핑됨
-- [ ] chips 값이 양수인지 확인
-- [ ] rank 값이 연속적인지 확인
-
-### 9.2 렌더 결과
-
-- [ ] 모든 슬롯에 데이터 바인딩됨
-- [ ] 국기 이미지 로드 성공
-- [ ] 숫자 포맷 정확성 (콤마, 달러 기호)
-- [ ] 출력 해상도 일치 (1920x1080)
-
----
-
-## Appendix: 컴포지션-필드 키 매핑 전체 목록
-
-> **Note**: 모든 필드 키는 **Case-Insensitive** 매핑됩니다. (`name` = `Name` = `NAME`)
-
-| 컴포지션 | 카테고리 | 필드 키 | 슬롯 수 | 비고 |
-|----------|----------|---------|--------|------|
-| _MAIN Mini Chip Count | chip_display | name, chip | 9 | `AVERAGE STACK` 특수 필드 포함 |
-| _SUB_Mini Chip Count | chip_display | name, chip | 9 | |
-| _Feature Table Leaderboard | leaderboard | (메인 컴프) | - | MAIN/SUB 서브컴프 포함 |
-| Feature Table Leaderboard MAIN | leaderboard | Name, Chips, Date, Flag | 9 | ⚠️ Date=순위번호, BBs 슬롯 없음 |
-| Feature Table Leaderboard SUB | leaderboard | Name, Chips, Date, Flag | 9 | |
-| _Mini Payout | payout | Rank, Name, prize | 9 | `Total Prize` 특수 필드 포함 |
-| NAME | player_info | name, country, bracelets, earnings | 1 | |
-| Elimination | elimination | (고정 레이어) | 1 | 복합 텍스트 레이어 구조 |
-| Event info | event_info | event_name, buy_in, entries, prize_pool | 1 | |
-| Broadcast Schedule | schedule | date, time, event_name | 20 | |

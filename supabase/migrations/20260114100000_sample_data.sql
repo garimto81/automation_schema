@@ -192,26 +192,11 @@ FROM hand3, (VALUES
 ON CONFLICT (hand_id, seat_num) DO NOTHING;
 
 -- ============================================================================
--- 5. Manual Players - 수동 관리 플레이어 (한글 이름 포함)
+-- 5. Manual Players - 삭제됨 (스키마 단순화로 manual_players 테이블 제거)
+-- 참고: 20260116000000_schema_simplification.sql 참조
 -- ============================================================================
 
-INSERT INTO manual_players (
-    id, player_code, name, name_korean, name_display,
-    country_code, country_name, bio, is_verified, is_active, created_by
-) VALUES
-    (gen_random_uuid(), 'MP-001', 'Jean-Robert Bellande', '장-로버트 벨란드', 'Jean-Robert Bellande', 'US', 'United States',
-     'Professional poker player and entrepreneur. Known for his aggressive playing style and TV appearances.',
-     TRUE, TRUE, 'system'),
-    (gen_random_uuid(), 'MP-002', 'Alexandros Kolonias', '알렉산드로스 콜로니아스', 'Alexandros Kolonias', 'GR', 'Greece',
-     'WSOP bracelet winner. One of the most successful Greek poker players.',
-     TRUE, TRUE, 'system'),
-    (gen_random_uuid(), 'MP-003', 'Nikita Kuznetsov', '니키타 쿠즈네초프', 'Nikita Kuznetsov', 'RU', 'Russia',
-     'High stakes tournament player.',
-     FALSE, TRUE, 'system'),
-    (gen_random_uuid(), 'MP-004', 'Sebastian Pauli', '세바스티안 파울리', 'Sebastian Pauli', 'DE', 'Germany',
-     'German poker pro specializing in MTTs.',
-     FALSE, TRUE, 'system')
-ON CONFLICT DO NOTHING;
+-- manual_players 테이블이 삭제되었으므로 샘플 데이터 제거됨
 
 -- ============================================================================
 -- 6. WSOP Events - 이벤트 데이터
@@ -368,9 +353,9 @@ BEGIN
     RAISE NOTICE '  - gfx_sessions: 2개';
     RAISE NOTICE '  - gfx_hands: 3개';
     RAISE NOTICE '  - gfx_hand_players: 8개';
-    RAISE NOTICE '  - manual_players: 4명';
     RAISE NOTICE '  - wsop_events: 2개';
     RAISE NOTICE '  - wsop_standings: 1개 (16명 순위)';
     RAISE NOTICE '  - broadcast_sessions: 6개';
     RAISE NOTICE '  - render_queue: 1개';
+    RAISE NOTICE '  (manual_players: 스키마 단순화로 제거됨)';
 END $$;

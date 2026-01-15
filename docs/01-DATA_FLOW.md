@@ -2,8 +2,13 @@
 
 전체 시스템 데이터 흐름 및 통합 아키텍처 설계 문서
 
-**Version**: 1.0.0
-**Date**: 2026-01-13
+**Version**: 2.0.0
+**Date**: 2026-01-16
+
+> ⚠️ **스키마 변경 안내 (2026-01-16)**
+> - `manual_players` 테이블 삭제 → `gfx_players`/`wsop_players` 직접 사용
+> - `chip_snapshots` 테이블 삭제 → `wsop_chip_counts`/`gfx_hand_players` 사용
+> - `profile_images` → `wsop_player_id`/`gfx_player_id` 참조로 변경
 **Project**: Automation DB Schema
 
 ---
@@ -41,14 +46,14 @@
 ═══════════════════════════════════════════════════════════════════════════════
 
     ┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-    │  GFX JSON   │     │   WSOP+     │     │   Manual    │
+    │  GFX JSON   │     │   WSOP+     │     │   Override  │
     │    DB       │     │    DB       │     │    DB       │
     ├─────────────┤     ├─────────────┤     ├─────────────┤
-    │ gfx_sessions│     │ wsop_events │     │manual_player│
-    │ gfx_hands   │     │ wsop_players│     │profile_image│
-    │ gfx_events  │     │ wsop_chips  │     │player_override│
-    │ gfx_players │     │ wsop_standings│   │player_link  │
-    │ hand_grades │     │ import_logs │     │ audit_log   │
+    │ gfx_sessions│     │ wsop_events │     │profile_image│
+    │ gfx_hands   │     │ wsop_players│     │player_override│
+    │ gfx_events  │     │ wsop_chips  │     │player_link  │
+    │ gfx_players │     │ wsop_standings│   │             │
+    │ hand_grades │     │ import_logs │     │             │
     └──────┬──────┘     └──────┬──────┘     └──────┬──────┘
            │                   │                   │
            └───────────────────┼───────────────────┘
@@ -131,7 +136,7 @@
 |--------|------|------|-------------|
 | **GFX JSON DB** | Input | PokerGFX JSON 파일 정규화 | gfx_sessions, gfx_hands |
 | **WSOP+ DB** | Input | WSOP+ 데이터 임포트 | wsop_events, wsop_players |
-| **Manual DB** | Input | 수동 플레이어 관리 | manual_players, profile_images |
+| **Override DB** | Input | 플레이어 오버라이드/이미지 | profile_images, player_overrides |
 | **Supabase Orchestration** | Orchestration | 통합 뷰, 작업 큐 | unified_players, job_queue |
 | **Cuesheet DB** | Dashboard | 방송 진행 관리 | cue_sheets, cue_items |
 | **AEP Analysis DB** | Output | AE 컴포지션 분석 | aep_compositions, aep_layers |
@@ -253,11 +258,11 @@
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-### 2.3 Manual 데이터 흐름
+### 2.3 Override 데이터 흐름
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Manual Data Flow                                     │
+│                         Override Data Flow                                   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 [Admin Web UI]
@@ -265,9 +270,8 @@
      │ User Input / Image Upload
      ▼
 ┌─────────────────┐
-│ Manual Editor   │
+│ Override Editor │
 │                 │
-│ - Player Form   │
 │ - Image Upload  │
 │ - Link Mapping  │
 │ - Override      │
@@ -276,25 +280,19 @@
          │ Validation & Processing
          ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                          Manual DB                               │
+│                         Override DB                              │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  ┌──────────────┐    ┌──────────────┐    ┌──────────────┐      │
-│  │manual_players│───▶│profile_images│    │player_       │      │
-│  │              │    │              │    │overrides     │      │
-│  └──────┬───────┘    └──────────────┘    └──────────────┘      │
-│         │                                                        │
-│         │  Link to other sources                                │
-│         ▼                                                        │
-│  ┌──────────────┐                                               │
-│  │player_link_  │──────┐                                        │
-│  │mapping       │      │  FK to wsop_players                    │
-│  └──────────────┘      │  FK to gfx_players                     │
-│                        │                                         │
-│  ┌──────────────┐      │                                        │
-│  │manual_audit_ │◀─────┘  (Change tracking)                     │
-│  │log           │                                               │
-│  └──────────────┘                                               │
+│  │profile_images│    │player_       │    │player_link_  │      │
+│  │              │    │overrides     │    │mapping       │      │
+│  │ wsop_player  │    │              │    │              │      │
+│  │ gfx_player   │    │ wsop_player  │    │ wsop_player  │      │
+│  │ (FK)         │    │ gfx_player   │    │ gfx_player   │      │
+│  └──────────────┘    └──────────────┘    └──────────────┘      │
+│                                                                  │
+│  ※ wsop_players / gfx_players를 직접 참조                       │
+│  ※ manual_players 삭제됨 (2026-01-16)                           │
 │                                                                  │
 └─────────────────────────────────────────────────────────────────┘
 ```
@@ -307,38 +305,36 @@
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────┐   ┌─────────────┐   ┌─────────────┐
-│  GFX JSON   │   │   WSOP+     │   │   Manual    │
+│  GFX JSON   │   │   WSOP+     │   │  Override   │
 │     DB      │   │     DB      │   │     DB      │
 └──────┬──────┘   └──────┬──────┘   └──────┬──────┘
        │                 │                 │
-       │ gfx_players     │ wsop_players    │ manual_players
-       │                 │                 │
+       │ gfx_players     │ wsop_players    │ player_overrides
+       │                 │                 │ profile_images
        └─────────────────┼─────────────────┘
                          │
-                         │ player_link_mapping
+                         │ player_link_mapping (gfx↔wsop 교집합)
                          ▼
               ┌─────────────────────┐
               │                     │
               │   unified_players   │  VIEW
               │                     │
               │  - source           │
-              │  - name             │
+              │  - name             │  (gfx/wsop만 UNION)
               │  - country_code     │
               │  - profile_image    │
-              │  - is_verified      │
-              │  - linked_sources   │
               │                     │
               └──────────┬──────────┘
                          │
-                         │ Priority: Manual > WSOP+ > GFX
-                         │ + Override Rules
+                         │ Priority: WSOP+ > GFX
+                         │ + Override Rules 적용
                          ▼
               ┌─────────────────────┐
               │                     │
               │  Final Player Data  │  API Response
               │                     │
-              │  with all fields    │
-              │  merged             │
+              │  with overrides     │
+              │  applied            │
               │                     │
               └─────────────────────┘
 ```

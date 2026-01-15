@@ -2,8 +2,12 @@
 
 방송 진행 큐시트 관리를 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 2.0.0
-**Date**: 2026-01-13
+**Version**: 2.1.0
+**Date**: 2026-01-16
+
+> ⚠️ **스키마 변경 안내 (2026-01-16)**
+> - `chip_snapshots` 테이블 삭제됨 → `wsop_chip_counts`/`gfx_hand_players` 사용
+> - `cue_items.snapshot_id` FK 제거됨
 **Project**: Automation DB Schema
 **Source**: [Google Sheets - WSOP SC Cyprus ME Day1A](https://docs.google.com/spreadsheets/d/1XiZqoZ3DggHdafWGEzN3PTbCNmTRSt8Ab1Ofclsoc34/edit)
 
@@ -17,7 +21,7 @@
 - 방송 세션 및 큐시트 관리
 - 개별 큐 아이템 (GFX 요소) 순서 제어
 - **핸드 히스토리 및 편집 포인트 관리**
-- **칩카운트/리더보드 데이터 연동**
+- **칩카운트/리더보드는 `wsop_chip_counts`/`gfx_hand_players`에서 조회**
 - 큐 템플릿으로 재사용 가능한 구성 저장
 - GFX 트리거 및 렌더링 상태 추적
 - 실시간 방송 진행 모니터링
@@ -84,20 +88,22 @@
 │   방송 세션    │────▶│   큐시트      │────▶│   큐 아이템    │
 │   (Session)   │  1:N│   (Sheet)     │  1:N│   (Item)      │
 └───────────────┘     └───────────────┘     └───────┬───────┘
-        │                                          │
-        │                                          │ trigger
-        │                                          ▼
-        │            ┌───────────────┐     ┌───────────────┐
-        │            │   큐 템플릿    │     │  GFX 트리거   │
-        │            │   (Template)  │────▶│   (Trigger)   │
-        │            └───────────────┘     └───────┬───────┘
-        │                                          │
-        │   1:N                                    │ render
-        ▼                                          ▼
-┌───────────────┐                          ┌───────────────┐
-│   칩카운트    │                          │   AEP 렌더    │
-│ (ChipSnapshot)│                          │   (Output)    │
-└───────────────┘                          └───────────────┘
+                                                   │
+                                                   │ trigger
+                                                   ▼
+                     ┌───────────────┐     ┌───────────────┐
+                     │   큐 템플릿    │     │  GFX 트리거   │
+                     │   (Template)  │────▶│   (Trigger)   │
+                     └───────────────┘     └───────┬───────┘
+                                                   │
+                                                   │ render
+                                                   ▼
+                                           ┌───────────────┐
+                                           │   AEP 렌더    │
+                                           │   (Output)    │
+                                           └───────────────┘
+
+※ 칩카운트 데이터는 wsop_chip_counts / gfx_hand_players에서 조회
 ```
 
 ### 1.5 핵심 기능
@@ -108,7 +114,7 @@
 | **큐시트 관리** | 방송 구간별 큐시트 구성 |
 | **큐 아이템** | 개별 GFX 요소 순서/타이밍 제어 |
 | **핸드 히스토리** | Pre/Flop/Turn/River 액션 기록 |
-| **칩카운트 스냅샷** | 실시간 칩 현황 스냅샷 저장 |
+| **칩카운트 조회** | wsop_chip_counts/gfx_hand_players에서 조회 |
 | **템플릿** | 재사용 가능한 큐 구성 저장 |
 | **트리거 로그** | GFX 송출 이력 추적 |
 
@@ -224,12 +230,13 @@
 | 관계 | 설명 |
 |------|------|
 | `broadcast_sessions` 1:N `cue_sheets` | 세션당 여러 큐시트 |
-| `broadcast_sessions` 1:N `chip_snapshots` | 세션당 여러 칩 스냅샷 |
 | `cue_sheets` 1:N `cue_items` | 큐시트당 여러 아이템 |
 | `cue_items` 1:N `gfx_triggers` | 아이템당 여러 트리거 |
-| `cue_items` N:1 `chip_snapshots` | 아이템이 특정 스냅샷 참조 |
 | `cue_templates` 1:N `cue_items` | 템플릿 → 아이템 참조 |
 | `cue_sheets.current_item_id` → `cue_items` | 현재 진행 중 아이템 |
+
+> ※ `chip_snapshots` 테이블 삭제됨 (2026-01-16)
+> 칩카운트 데이터는 `wsop_chip_counts` / `gfx_hand_players`에서 조회
 
 ---
 
@@ -554,8 +561,8 @@ CREATE TABLE cue_items (
     -- 템플릿 참조 (선택적)
     template_id UUID REFERENCES cue_templates(id) ON DELETE SET NULL,
 
-    -- 칩 스냅샷 참조 (해당 시점의 칩카운트)
-    snapshot_id UUID REFERENCES chip_snapshots(id) ON DELETE SET NULL,
+    -- ※ snapshot_id 삭제됨 (2026-01-16)
+    -- 칩카운트는 wsop_chip_counts / gfx_hand_players에서 직접 조회
 
     -- =========================================================================
     -- LIVE 시트 컬럼 매핑 (A-R)
@@ -676,73 +683,20 @@ CREATE INDEX idx_cue_items_hand_number ON cue_items(hand_number) WHERE hand_numb
 CREATE INDEX idx_cue_items_status ON cue_items(status);
 CREATE INDEX idx_cue_items_order ON cue_items(sheet_id, sort_order);
 CREATE INDEX idx_cue_items_template ON cue_items(template_id);
-CREATE INDEX idx_cue_items_snapshot ON cue_items(snapshot_id);
 CREATE INDEX idx_cue_items_file_name ON cue_items(file_name) WHERE file_name IS NOT NULL;
+-- idx_cue_items_snapshot 삭제됨 (snapshot_id 컬럼 제거)
 CREATE INDEX idx_cue_items_gfx_data ON cue_items USING GIN (gfx_data);
 ```
 
-### 4.3.1 chip_snapshots (칩카운트 스냅샷)
+### 4.3.1 chip_snapshots (삭제됨)
 
-```sql
--- ============================================================================
--- chip_snapshots: 칩카운트 스냅샷
--- Google Sheets chipcount/leaderboard 시트 데이터
--- ============================================================================
-
-CREATE TABLE chip_snapshots (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-
-    -- 세션 참조
-    session_id UUID NOT NULL REFERENCES broadcast_sessions(id) ON DELETE CASCADE,
-
-    -- 스냅샷 시점
-    snapshot_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-
-    -- 블라인드 정보
-    blind_level TEXT,  -- "300 / 500"
-    blind_bb INTEGER,  -- 500
-
-    -- 전체 통계
-    players_remaining INTEGER,
-    total_chips BIGINT,
-    avg_stack INTEGER,
-
-    -- 플레이어별 칩카운트 (JSONB)
-    players_data JSONB NOT NULL DEFAULT '[]'::JSONB,
-    /*
-    [
-        {
-            "rank": 1,
-            "poker_room": "Main",
-            "table_name": "Red",
-            "table_id": 43748,
-            "table_no": 24,
-            "seat_id": 435388,
-            "seat_no": 3,
-            "player_id": 101437,
-            "player_name": "Oscar Romero Cobos",
-            "player_name_display": "OSCAR COBOS",
-            "nationality": "ES",
-            "chipcount": 154500,
-            "bb_stack": 103
-        },
-        ...
-    ]
-    */
-
-    -- 메타데이터
-    source TEXT DEFAULT 'pokercaster',  -- 데이터 소스
-    notes TEXT,
-
-    -- 타임스탬프
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 인덱스
-CREATE INDEX idx_chip_snapshots_session ON chip_snapshots(session_id);
-CREATE INDEX idx_chip_snapshots_time ON chip_snapshots(snapshot_time DESC);
-CREATE INDEX idx_chip_snapshots_players ON chip_snapshots USING GIN (players_data);
-```
+> ⚠️ **chip_snapshots 테이블 삭제됨 (2026-01-16)**
+>
+> 칩카운트 데이터는 다음 테이블에서 조회:
+> - **WSOP+ 칩카운트**: `wsop_chip_counts` 테이블
+> - **GFX 핸드별 스택**: `gfx_hand_players.end_stack_amt`
+>
+> Pokercaster → Google Sheets 파이프라인이 존재하지 않으므로 삭제됨.
 
 ### 4.4 cue_templates (큐 템플릿) - template 시트 매핑
 
@@ -1656,8 +1610,8 @@ CREATE POLICY "gfx_triggers_insert_service"
 | main | 495054819 | (참조용) | MAIN 테이블 타임라인 |
 | sub | 360071413 | (참조용) | SUB 테이블 타임라인 |
 | virtual | 561799849 | (참조용) | VIRTUAL GFX 타임라인 |
-| **chipcount** | 863418569 | `chip_snapshots` | 실시간 칩카운트 |
-| leaderboard | 369994611 | `chip_snapshots` | 전체 리더보드 |
+| **chipcount** | 863418569 | `wsop_chip_counts` | 실시간 칩카운트 |
+| leaderboard | 369994611 | `wsop_chip_counts` | 전체 리더보드 |
 | **payout** | 1594013979 | (별도 스키마) | 상금 구조 |
 | **template** | 487939277 | `cue_templates` | GFX 템플릿 정의 |
 | for ZED | 1519464196 | (외부 연동) | ZED 전달용 |

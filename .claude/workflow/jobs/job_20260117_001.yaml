@@ -1,0 +1,118 @@
+job_id: job_20260117_001
+created_at: 2026-01-17T10:00:00
+request: "GFX-AEP 매핑 동기화 마이그레이션 검증 및 코드 리뷰"
+status: completed
+completed_at: 2026-01-17T12:30:00
+
+tasks:
+  - id: task_001
+    agent: code-reviewer
+    action: "SQL 마이그레이션 코드 리뷰"
+    input:
+      files:
+        - supabase/migrations/20260117000000_fix_render_views.sql
+        - supabase/migrations/20260117100000_update_compositions_v2.sql
+        - supabase/migrations/20260117200000_upgrade_render_functions_v3.sql
+    depends_on: null
+    output_file: results/task_001.yaml
+    status: completed
+
+  - id: task_002
+    agent: database-specialist
+    action: "DB 스키마 정합성 검증"
+    input:
+      check_items:
+        - 뷰 참조 무결성
+        - 함수 반환 타입 일관성
+        - 인덱스 효율성
+    depends_on: null
+    output_file: results/task_002.yaml
+    status: completed
+
+  - id: task_003
+    agent: orchestrator
+    action: "player_overrides 스키마 불일치 수정"
+    input:
+      critical_issues:
+        - CRIT-001: v_render_* 뷰 player_overrides 조인 오류
+        - CRIT-003: 렌더링 함수 player_overrides 컬럼 미존재 참조
+    depends_on:
+      - task_001
+      - task_002
+    status: completed
+    resolution: |
+      player_overrides 테이블이 field_name + override_value 구조 사용 확인.
+      모든 뷰/함수에서 잘못된 컬럼 참조 수정:
+      - po.corrected_name → po_name.override_value (field_name='name')
+      - po.country_code → po_country.override_value (field_name='country_code')
+      - po.is_active → po_name.active / po_country.active
+
+      수정된 파일:
+      1. 20260117000000_fix_render_views.sql
+         - v_render_chip_display: 완료
+         - v_render_elimination: 완료
+         - v_render_at_risk: 완료
+         - get_chip_display_data(): 완료
+         - get_at_risk_data(): 완료
+
+      2. 20260117200000_upgrade_render_functions_v3.sql
+         - get_player_history_data(): 완료
+         - get_player_name_data(): 완료
+
+      3. 20260117300000_validation_tests.sql (신규 생성)
+         - 스키마 검증
+         - 뷰 실행 테스트
+         - 함수 실행 테스트
+         - 인덱스 권장 사항
+
+summary:
+  total_issues_found: 10
+  critical_fixed: 4
+  high_fixed: 2
+  medium_fixed: 2
+  warnings_addressed: 2
+
+  files_modified:
+    - path: supabase/migrations/20260117000000_fix_render_views.sql
+      changes:
+        - "v_render_chip_display: LEFT JOIN 2개로 분리 (po_name, po_country)"
+        - "v_render_elimination: LEFT JOIN 2개로 분리"
+        - "v_render_at_risk: LEFT JOIN 2개로 분리"
+        - "get_chip_display_data(): player_overrides data_sources 추가"
+        - "get_at_risk_data(): 동일 패턴 적용"
+        - "COALESCE 추가: big_blind_amt NULL 처리"
+
+    - path: supabase/migrations/20260117200000_upgrade_render_functions_v3.sql
+      changes:
+        - "get_player_history_data(): field_name + override_value 패턴 적용"
+        - "get_player_name_data(): field_name + override_value 패턴 적용"
+        - "주석 추가: player_overrides 스키마 설명"
+
+  files_created:
+    - path: supabase/migrations/20260117300000_validation_tests.sql
+      purpose: "마이그레이션 적용 후 검증 테스트"
+
+next_actions:
+  - priority: P0
+    action: "마이그레이션 순서대로 적용"
+    command: |
+      supabase db push
+      또는
+      psql -f supabase/migrations/20260117000000_fix_render_views.sql
+      psql -f supabase/migrations/20260117100000_update_compositions_v2.sql
+      psql -f supabase/migrations/20260117200000_upgrade_render_functions_v3.sql
+      psql -f supabase/migrations/20260117300000_validation_tests.sql
+
+  - priority: P1
+    action: "인덱스 추가 권장"
+    command: |
+      CREATE INDEX idx_player_overrides_gfx_player_id
+        ON player_overrides(gfx_player_id);
+
+      CREATE INDEX idx_player_overrides_lookup
+        ON player_overrides(gfx_player_id, field_name)
+        WHERE active = TRUE;
+
+  - priority: P2
+    action: "성능 모니터링"
+    reason: "대규모 세션(>1000 hands)에서 쿼리 응답시간 측정"

@@ -1,3 +1,6 @@
+%% Unified Schema ERD
+%% Updated: 2026-01-16 (manual_players, chip_snapshots 삭제됨)
+
 erDiagram
     %% GFX Schema
     gfx_sessions ||--o{ gfx_hands : contains
@@ -11,27 +14,26 @@ erDiagram
     wsop_players ||--o{ wsop_event_players : participates
     wsop_players ||--o{ wsop_chip_counts : has
 
-    %% Manual Schema
-    manual_players ||--o{ profile_images : has
-    manual_players ||--o{ player_overrides : has
+    %% Override Schema (manual_players 삭제됨)
+    wsop_players ||--o{ profile_images : "wsop_player_id"
+    gfx_players ||--o{ profile_images : "gfx_player_id"
+    wsop_players ||--o{ player_overrides : "wsop_player_id"
+    gfx_players ||--o{ player_overrides : "gfx_player_id"
 
-    %% Player Linking - Cross Schema
-    player_link_mapping }o--|| manual_players : links
+    %% Player Linking - Cross Schema (gfx↔wsop만)
     player_link_mapping }o--|| wsop_players : links
     player_link_mapping }o--|| gfx_players : links
 
-    %% Cuesheet Schema
+    %% Cuesheet Schema (chip_snapshots 삭제됨)
     broadcast_sessions ||--o{ cue_sheets : has
     cue_sheets ||--o{ cue_items : contains
-    broadcast_sessions ||--o{ chip_snapshots : has
 
     %% Orchestration Schema
     job_queue ||--o{ render_queue : triggers
     job_queue ||--o{ notifications : creates
     sync_status ||--o{ sync_history : records
 
-    %% Unified Views - Virtual
-    unified_players }o--|| manual_players : aggregates
+    %% Unified Views - Virtual (gfx + wsop만)
     unified_players }o--|| wsop_players : aggregates
     unified_players }o--|| gfx_players : aggregates
 
@@ -52,6 +54,7 @@ erDiagram
         uuid id PK
         uuid hand_id FK
         uuid player_id FK
+        numeric end_stack_amt
     }
 
     gfx_events {
@@ -75,6 +78,7 @@ erDiagram
         uuid id PK
         text wsop_player_id UK
         text name
+        text profile_image_url
     }
 
     wsop_event_players {
@@ -87,30 +91,31 @@ erDiagram
         uuid id PK
         uuid event_id FK
         uuid player_id FK
-    }
-
-    manual_players {
-        uuid id PK
-        text player_code UK
-        text name
+        bigint chip_count
     }
 
     profile_images {
         uuid id PK
-        uuid player_id FK
+        uuid wsop_player_id FK "nullable"
+        uuid gfx_player_id FK "nullable"
+        text file_path
+        text url
     }
 
     player_overrides {
         uuid id PK
-        uuid player_id FK
+        uuid wsop_player_id FK "nullable"
+        uuid gfx_player_id FK "nullable"
+        text field_name
+        text override_value
     }
 
     player_link_mapping {
         uuid id PK
-        uuid manual_player_id FK
         uuid wsop_player_id FK
         uuid gfx_player_id FK
         numeric match_confidence
+        boolean is_verified
     }
 
     broadcast_sessions {
@@ -126,11 +131,6 @@ erDiagram
     cue_items {
         uuid id PK
         uuid sheet_id FK
-    }
-
-    chip_snapshots {
-        uuid id PK
-        uuid session_id FK
     }
 
     job_queue {
@@ -159,7 +159,13 @@ erDiagram
     }
 
     unified_players {
-        text source
+        text source "gfx or wsop"
         uuid source_id
         text name
     }
+
+    %% 삭제된 테이블 (참고용)
+    %% manual_players - 삭제됨
+    %% manual_audit_log - 삭제됨
+    %% chip_snapshots - 삭제됨
+
