@@ -68,6 +68,145 @@ Root (Session)
         └── 통계 (VPIP%, PFR%, Aggression%, ShowdownPct)
 ```
 
+### 1.4 JSON Field → DB Column 매핑표
+
+> **주의**: JSON 필드명과 DB 컬럼명이 다릅니다. 파싱 시 반드시 아래 매핑을 참조하세요.
+
+#### 1.4.1 Session Level (gfx_sessions)
+
+| JSON 필드 | DB 컬럼 | 타입 변환 | 비고 |
+|-----------|---------|-----------|------|
+| **`ID`** | `session_id` | int64 → BIGINT | **핵심 매핑** (필드명 주의!) |
+| `CreatedDateTimeUTC` | `session_created_at` | ISO 8601 → TIMESTAMPTZ | |
+| `Type` | `table_type` | string → ENUM | 'FEATURE_TABLE', 'UNKNOWN' 등 |
+| `EventTitle` | `event_title` | string → TEXT | 빈 문자열 가능 |
+| `SoftwareVersion` | `software_version` | string → TEXT | |
+| `Payouts` | `payouts` | int[10] → INTEGER[] | 고정 10개 슬롯 |
+| `Hands.length` | `hand_count` | 계산 → INTEGER | `len(Hands)` |
+| *파일명* | `file_name` | 추출 → TEXT | 파서에서 추출 |
+| *SHA256* | `file_hash` | 계산 → TEXT | 파서에서 계산 |
+| *전체 JSON* | `raw_json` | object → JSONB | 원본 보존 |
+
+**파싱 예시**:
+```python
+# ✅ 올바른 방법
+session_id = data["ID"]  # JSON 필드명은 "ID"
+
+# ❌ 잘못된 방법 (KeyError 발생)
+session_id = data["session_id"]  # JSON에 이 필드 없음!
+```
+
+#### 1.4.2 Hand Level (gfx_hands)
+
+| JSON 필드 | DB 컬럼 | 타입 변환 | 비고 |
+|-----------|---------|-----------|------|
+| *parent.ID* | `session_id` | BIGINT | FK (부모 세션의 ID) |
+| `HandNum` | `hand_num` | int → INTEGER | |
+| `GameVariant` | `game_variant` | string → ENUM | 'HOLDEM' 등 |
+| `GameClass` | `game_class` | string → ENUM | 'FLOP' 등 |
+| `BetStructure` | `bet_structure` | string → ENUM | 'NOLIMIT' 등 |
+| `Duration` | `duration_seconds` | ISO 8601 Duration → INTEGER | 파싱 필요 |
+| `StartDateTimeUTC` | `start_time` | ISO 8601 → TIMESTAMPTZ | |
+| `RecordingOffsetStart` | `recording_offset_iso` | string → TEXT | 원본 보존 |
+| `RecordingOffsetStart` | `recording_offset_seconds` | ISO 8601 Duration → BIGINT | 파싱 |
+| `NumBoards` | `num_boards` | int → INTEGER | |
+| `RunItNumTimes` | `run_it_num_times` | int → INTEGER | |
+| `AnteAmt` | `ante_amt` | int → INTEGER | |
+| `BombPotAmt` | `bomb_pot_amt` | int → INTEGER | |
+| `Description` | `description` | string → TEXT | |
+| `FlopDrawBlinds` | `blinds` | object → JSONB | 전체 객체 저장 |
+| `StudLimits` | `stud_limits` | object → JSONB | 전체 객체 저장 |
+| *Events[-1].Pot* | `pot_size` | 계산 → INTEGER | 마지막 이벤트 Pot |
+| *len(Players)* | `player_count` | 계산 → INTEGER | |
+
+**Duration 파싱 예시**:
+```python
+# "PT35M37.2477537S" → 2137 (초)
+import re
+def parse_duration(duration: str) -> int:
+    total = 0
+    if m := re.search(r'(\d+(?:\.\d+)?)M', duration):
+        total += float(m.group(1)) * 60
+    if m := re.search(r'(\d+(?:\.\d+)?)S', duration):
+        total += float(m.group(1))
+    return int(total)
+```
+
+#### 1.4.3 Event Level (gfx_events)
+
+| JSON 필드 | DB 컬럼 | 타입 변환 | 변환 주의 |
+|-----------|---------|-----------|----------|
+| *배열 인덱스* | `event_order` | int → INTEGER | |
+| `EventType` | `event_type` | string → ENUM | **`"BOARD CARD"` → `BOARD_CARD`** |
+| `PlayerNum` | `player_num` | int → INTEGER | 0 = board |
+| `BetAmt` | `bet_amt` | int → INTEGER | |
+| `Pot` | `pot` | int → INTEGER | |
+| `BoardCards` | `board_cards` | string → TEXT | 단일 카드 |
+| `BoardNum` | `board_num` | int → INTEGER | |
+| `NumCardsDrawn` | `num_cards_drawn` | int → INTEGER | |
+| `DateTimeUTC` | `event_time` | string → TIMESTAMPTZ | null 가능 |
+
+**EventType 변환 규칙**:
+```python
+EVENT_TYPE_MAP = {
+    "FOLD": "FOLD",
+    "CHECK": "CHECK",
+    "CALL": "CALL",
+    "BET": "BET",
+    "RAISE": "RAISE",
+    "ALL IN": "ALL_IN",      # 공백 → 언더스코어
+    "BOARD CARD": "BOARD_CARD",  # 공백 → 언더스코어
+}
+```
+
+#### 1.4.4 Player Level (gfx_hand_players)
+
+| JSON 필드 | DB 컬럼 | 타입 변환 | 변환 주의 |
+|-----------|---------|-----------|----------|
+| `PlayerNum` | `seat_num` | int → INTEGER | CHECK (1-10) |
+| `Name` | `player_name` | string → TEXT | |
+| `LongName` | *gfx_players 참조* | string → TEXT | |
+| `HoleCards` | `hole_cards` | string[] → TEXT[] | **공백 분리 필요** |
+| *hole_cards 유무* | `has_shown` | bool → BOOLEAN | 계산 |
+| `StartStackAmt` | `start_stack_amt` | int → INTEGER | |
+| `EndStackAmt` | `end_stack_amt` | int → INTEGER | |
+| `CumulativeWinningsAmt` | `cumulative_winnings_amt` | int → INTEGER | |
+| `BlindBetStraddleAmt` | `blind_bet_straddle_amt` | int → INTEGER | |
+| `SittingOut` | `sitting_out` | bool → BOOLEAN | |
+| `EliminationRank` | `elimination_rank` | int → INTEGER | -1 = 미탈락 |
+| *stack 증가 여부* | `is_winner` | bool → BOOLEAN | 계산 |
+| `VPIPPercent` | `vpip_percent` | float → NUMERIC(5,2) | |
+| `PreFlopRaisePercent` | `preflop_raise_percent` | float → NUMERIC(5,2) | |
+| `AggressionFrequencyPercent` | `aggression_frequency_percent` | float → NUMERIC(5,2) | |
+| `WentToShowDownPercent` | `went_to_showdown_percent` | float → NUMERIC(5,2) | |
+
+**HoleCards 파싱 규칙**:
+```python
+# JSON: ["10d 9d"] (공백으로 구분된 단일 문자열)
+# DB:   ["10d", "9d"] (개별 카드 배열)
+
+def parse_hole_cards(cards: list[str]) -> list[str]:
+    if not cards or cards[0] == "":
+        return []
+    return cards[0].split()  # "10d 9d" → ["10d", "9d"]
+```
+
+#### 1.4.5 Player Master (gfx_players)
+
+| JSON 필드 | DB 컬럼 | 타입 변환 | 비고 |
+|-----------|---------|-----------|------|
+| *MD5(Name:LongName)* | `player_hash` | 계산 → TEXT | UNIQUE |
+| `Name` | `name` | string → TEXT | |
+| `LongName` | `long_name` | string → TEXT | |
+
+**Player Hash 생성**:
+```python
+import hashlib
+def generate_player_hash(name: str, long_name: str) -> str:
+    key = f"{name.lower().strip()}:{long_name.lower().strip()}"
+    return hashlib.md5(key.encode()).hexdigest()
+```
+
 ---
 
 ## 2. ERD (Entity Relationship Diagram)
