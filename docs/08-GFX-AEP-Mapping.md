@@ -1,7 +1,7 @@
 # 08. GFX JSON DB → AEP 자막 매핑 명세서
 
-**Version**: 2.0.0
-**Last Updated**: 2026-01-14
+**Version**: 2.1.0
+**Last Updated**: 2026-01-16
 **Status**: Active
 **Project**: Feature Table Automation (FT-0001)
 
@@ -75,8 +75,8 @@ GFX JSON DB 데이터를 After Effects **26개 컴포지션** (방송 전or후 �
 | GFX JSON DB | gfx_sessions | 기본 소스: 이벤트 제목, payouts | Primary |
 | WSOP+ DB | wsop_standings | 보조 소스: 전체 순위표 (30명+) | Secondary |
 | WSOP+ DB | wsop_events | 보조 소스: 이벤트 상세, 공식 payouts | Secondary |
-| Manual DB | manual_players | 오버라이드: 잘못된 데이터 수정, 프로필 보완 | Override |
-| Manual DB | unified_players | 통합 뷰 (Manual 오버라이드 적용) | - |
+| Manual DB | player_overrides | 오버라이드: 잘못된 데이터 수정, 프로필 보완 | Override |
+| Manual DB | gfx_players | 플레이어 마스터 데이터 | - |
 
 ---
 
@@ -101,14 +101,16 @@ GFX JSON DB 데이터를 After Effects **26개 컴포지션** (방송 전or후 �
 -- _MAIN Mini Chip Count: 9명까지 칩 순위 표시 (실제 AEP 슬롯 수)
 SELECT
     ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt DESC) AS slot_index,
-    UPPER(hp.player_name) AS name,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS name,
     format_chips(hp.end_stack_amt) AS chips,
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs,
     slot_index::TEXT AS rank,
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE
 WHERE hp.sitting_out = FALSE
   AND h.session_id = :session_id
   AND h.hand_num = :hand_num
@@ -339,14 +341,16 @@ LIMIT 2;
 ```sql
 -- NAME: player_name + 국기 + chips + bbs
 SELECT
-    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
-    COALESCE(mo.country_code, 'XX') AS country_code,
-    get_flag_path(COALESCE(mo.country_code, 'XX')) AS flag,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS player_name,
+    COALESCE(po_country.override_value, 'XX') AS country_code,
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag,
     format_chips(hp.end_stack_amt) AS chips,  -- v2.0 추가
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs  -- v2.0 추가
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE
 WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```
 
@@ -355,10 +359,12 @@ WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```sql
 -- NAME 1줄: player_name + 국기 (wsop+)
 SELECT
-    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
-    get_flag_path(COALESCE(mo.country_code, 'XX')) AS flag  -- v2.0 추가
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS player_name,
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag  -- v2.0 추가
 FROM gfx_hand_players hp
-LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE
 WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```
 
@@ -367,12 +373,13 @@ WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```sql
 -- NAME 2줄: player_name + chips + bbs (국기 제외)
 SELECT
-    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS player_name,
     format_chips(hp.end_stack_amt) AS chips,  -- v2.0 추가
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs  -- v2.0 추가
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
 WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num;
 ```
 
@@ -402,7 +409,7 @@ historical_chips AS (
       )
 )
 SELECT
-    UPPER(COALESCE(mo.corrected_name, hp.player_name)) AS player_name,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS player_name,
     format_chips(hp.end_stack_amt) AS chips,
     format_bbs(hp.end_stack_amt, (h.blinds->>'big_blind_amt')::BIGINT) AS bbs,
     TO_CHAR(hp.vpip_percent, 'FM99.9') || '%' AS vpip,  -- v2.0 VPIP 통합
@@ -411,16 +418,17 @@ SELECT
     format_chips(MAX(CASE WHEN hc.hands_ago = 30 THEN hc.chips END)) AS chips_30_hands_ago
 FROM gfx_hand_players hp
 JOIN gfx_hands h ON hp.hand_id = h.id
-LEFT JOIN manual_player_overrides mo ON LOWER(hp.player_name) = LOWER(mo.original_name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
 LEFT JOIN historical_chips hc ON TRUE
 WHERE hp.hand_id = :hand_id AND hp.seat_num = :seat_num
-GROUP BY hp.player_name, mo.corrected_name, hp.end_stack_amt, hp.vpip_percent, h.blinds;
+GROUP BY hp.player_name, po_name.override_value, hp.end_stack_amt, hp.vpip_percent, h.blinds;
 ```
 
-**Manual Override 용도:**
-- `corrected_name`: 이름 오타 수정 (예: "PHILL IVEY" → "PHIL IVEY")
-- `country_code`: 국적 정보 추가 (GFX에는 없음)
-- `profile_image`: 프로필 이미지 경로
+**Player Overrides 용도:**
+- `override_value` (field_name='name'): 이름 오타 수정 (예: "PHILL IVEY" → "PHIL IVEY")
+- `override_value` (field_name='country_code'): 국적 정보 추가 (GFX에는 없음)
+- `override_value` (field_name='profile_image'): 프로필 이미지 경로
 
 ---
 
@@ -437,16 +445,18 @@ GROUP BY hp.player_name, mo.corrected_name, hp.end_stack_amt, hp.vpip_percent, h
 
 ```sql
 SELECT
-    UPPER(hp.player_name) AS name,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS name,
     hp.elimination_rank AS rank,
     format_currency(
         (SELECT (payout->>'amount')::BIGINT FROM wsop_events e,
          LATERAL jsonb_array_elements(e.payouts) AS payout
          WHERE e.id = :event_id AND (payout->>'place')::INTEGER = hp.elimination_rank)
     ) AS prize,
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag
 FROM gfx_hand_players hp
-LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE
 WHERE hp.elimination_rank > 0
 ORDER BY hp.elimination_rank;
 ```
@@ -458,6 +468,7 @@ ORDER BY hp.elimination_rank;
 WITH at_risk_player AS (
     SELECT
         hp.player_name,
+        hp.player_id,
         hp.end_stack_amt,
         ROW_NUMBER() OVER (ORDER BY hp.end_stack_amt ASC) AS risk_rank
     FROM gfx_hand_players hp
@@ -477,7 +488,7 @@ remaining_players AS (
       AND hp.sitting_out = FALSE
 )
 SELECT
-    UPPER(arp.player_name) AS player_name,  -- v2.0 분리
+    UPPER(COALESCE(po_name.override_value, arp.player_name)) AS player_name,  -- v2.0 분리
     rp.cnt AS rank,  -- 현재 남은 인원 = 탈락 시 순위
     format_currency(
         (SELECT (payout->>'amount')::BIGINT
@@ -486,10 +497,12 @@ SELECT
          WHERE e.id = :event_id
            AND (payout->>'place')::INTEGER = rp.cnt)
     ) AS prize,  -- v2.0 분리
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag  -- v2.0 분리
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag  -- v2.0 분리
 FROM at_risk_player arp
 CROSS JOIN remaining_players rp
-LEFT JOIN unified_players up ON LOWER(arp.player_name) = LOWER(up.name);
+LEFT JOIN gfx_players gp ON arp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE;
 ```
 
 ---
@@ -734,9 +747,9 @@ INSERT INTO gfx_aep_field_mappings VALUES
     "hand_num": 42,
     "event_id": "uuid-event-id",
     "blind_level": "10K/20K",
-    "data_sources": ["gfx_hand_players", "wsop_events", "unified_players"],
-    "generated_at": "2026-01-14T10:35:00Z",
-    "schema_version": "3.0.0"
+    "data_sources": ["gfx_hand_players", "gfx_players", "player_overrides", "wsop_events"],
+    "generated_at": "2026-01-16T10:35:00Z",
+    "schema_version": "3.1.0"
   }
 }
 ```
@@ -809,7 +822,8 @@ INSERT INTO gfx_aep_field_mappings VALUES
 │ • ID (GameID)    │     │ • gfx_sessions   │     │ • 28개 컴포지션  │
 │ • EventTitle     │     │ • gfx_hands      │     │ • 텍스트 레이어  │
 │ • Hands[]        │     │ • gfx_hand_players│    │ • 슬롯 기반 매핑 │
-│ • Players[]      │     │ • unified_players │    │                  │
+│ • Players[]      │     │ • gfx_players    │     │ • v2.1 Override │
+│                  │     │ • player_overrides│    │                  │
 └──────────────────┘     └──────────────────┘     └──────────────────┘
 ```
 
@@ -1298,10 +1312,10 @@ chips_30h = [1500000, 1480000, 1450000, ...]  (30개)
 
 | AEP 필드 | 기본 소스 | Override | 변환 | 예시 |
 |----------|-----------|----------|------|------|
-| `name` | `gfx_hand_players.player_name` | `manual_player_overrides.corrected_name` | UPPER() | `"PHIL IVEY"` |
+| `name` | `gfx_hand_players.player_name` | `player_overrides.override_value` (field_name='name') | UPPER() | `"PHIL IVEY"` |
 | `chips` | `gfx_hand_players.end_stack_amt` | - | format_chips() | `"1,500,000"` |
 | `bbs` | 계산 | - | format_bbs() | `"75.0"` |
-| 국기 이미지 | - | `manual_player_overrides.country_code` | get_flag_path() | `"Flag/United States.png"` |
+| 국기 이미지 | - | `player_overrides.override_value` (field_name='country_code') | get_flag_path() | `"Flag/United States.png"` |
 
 > **v2.0.0 변경**: `chips`, `bbs` 필드 추가
 
@@ -1310,9 +1324,10 @@ chips_30h = [1500000, 1480000, 1450000, ...]  (30개)
 | AEP 필드 | 소스 | 변환 | 예시 |
 |----------|------|------|------|
 | `name` | `gfx_hand_players.player_name` | UPPER() | `"PHIL IVEY"` |
-| 국기 이미지 | `manual_player_overrides.country_code` | get_flag_path() | `"Flag/United States.png"` |
+| 국기 이미지 | `player_overrides.override_value` (field_name='country_code') | get_flag_path() | `"Flag/United States.png"` |
 
 > **v2.0.0 변경**: 국기 필드 추가 (wsop+)
+> **v2.1.0 변경**: player_overrides 테이블 적용
 
 #### 12.6.3 NAME 2줄 (국기 빼고) - v2.0 확장
 
@@ -1340,9 +1355,11 @@ chips_30h = [1500000, 1480000, 1450000, ...]  (30개)
 > - Chip VPIP 컴포지션에서 `vpip` 필드 통합
 > - Chip Flow와 연동되는 히스토리 칩 필드 추가 (10/20/30 핸드 전)
 
-**Override 우선순위:**
-```
-COALESCE(manual_player_overrides.corrected_name, gfx_hand_players.player_name)
+**Override 우선순위 (v2.1.0):**
+```sql
+-- player_overrides.override_value가 있으면 사용, 없으면 gfx_hand_players.player_name 사용
+COALESCE(po_name.override_value, hp.player_name)
+-- po_name = player_overrides WHERE field_name = 'name' AND active = TRUE
 ```
 
 ---
@@ -1353,25 +1370,27 @@ COALESCE(manual_player_overrides.corrected_name, gfx_hand_players.player_name)
 
 | AEP 필드 | GFX JSON 경로 | DB 컬럼 | 변환 | 예시 |
 |----------|---------------|---------|------|------|
-| `name` | `gfx_hand_players.player_name` | - | UPPER() | `"JOHN DOE"` |
+| `name` | `gfx_hand_players.player_name` | `player_overrides.override_value` (field_name='name') | UPPER() | `"JOHN DOE"` |
 | `rank` | `gfx_hand_players.elimination_rank` | - | 직접 | `"9"` |
 | `prize` | `wsop_events.payouts` | - | format_currency() | `"$82,000"` |
-| `flag` | `manual_player_overrides.country_code` | - | get_flag_path() | `"Flag/United States.png"` |
+| `flag` | - | `player_overrides.override_value` (field_name='country_code') | get_flag_path() | `"Flag/United States.png"` |
 
-**SQL 쿼리:**
+**SQL 쿼리 (v2.1.0):**
 ```sql
 -- elimination_rank > 0 인 플레이어 조회
 SELECT
-    UPPER(hp.player_name) AS name,
+    UPPER(COALESCE(po_name.override_value, hp.player_name)) AS name,
     hp.elimination_rank AS rank,
     format_currency(
         (SELECT (payout->>'amount')::BIGINT FROM wsop_events e,
          LATERAL jsonb_array_elements(e.payouts) AS payout
          WHERE e.id = :event_id AND (payout->>'place')::INTEGER = hp.elimination_rank)
     ) AS prize,
-    get_flag_path(COALESCE(up.country_code, 'XX')) AS flag
+    get_flag_path(COALESCE(po_country.override_value, 'XX')) AS flag
 FROM gfx_hand_players hp
-LEFT JOIN unified_players up ON LOWER(hp.player_name) = LOWER(up.name)
+LEFT JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_overrides po_name ON po_name.gfx_player_id = gp.id AND po_name.field_name = 'name' AND po_name.active = TRUE
+LEFT JOIN player_overrides po_country ON po_country.gfx_player_id = gp.id AND po_country.field_name = 'country_code' AND po_country.active = TRUE
 WHERE hp.elimination_rank > 0
 ORDER BY hp.elimination_rank DESC
 LIMIT 1;
@@ -1431,18 +1450,18 @@ LIMIT 1;
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    데이터 소스 폴백 순서                          │
+│                    데이터 소스 폴백 순서 (v2.1.0)                 │
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                 │
 │  player_name 예시:                                              │
 │                                                                 │
-│  1️⃣ gfx_hand_players.player_name                               │
-│     └─ "Phil"                                                   │
-│                     │                                           │
-│                     ▼ NULL 또는 오타 시                          │
-│                                                                 │
-│  2️⃣ manual_player_overrides.corrected_name                     │
+│  1️⃣ player_overrides.override_value (field_name='name')        │
 │     └─ "Phil Ivey" (수정된 이름)                                │
+│                     │                                           │
+│                     ▼ NULL 또는 활성 아님 시                     │
+│                                                                 │
+│  2️⃣ gfx_hand_players.player_name                               │
+│     └─ "Phil"                                                   │
 │                     │                                           │
 │                     ▼ NULL 시                                   │
 │                                                                 │
@@ -1452,9 +1471,10 @@ LIMIT 1;
 └─────────────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────────────┐
-│                    country_code 폴백                             │
+│                    country_code 폴백 (v2.1.0)                    │
 ├─────────────────────────────────────────────────────────────────┤
-│  1️⃣ manual_player_overrides.country_code  ← 유일한 소스         │
+│  1️⃣ player_overrides.override_value (field_name='country_code')│
+│     └─ "US" (수동 입력된 국적)                                  │
 │  2️⃣ 기본값: "XX" (Unknown)                                      │
 │  3️⃣ 국기 경로: "Flag/Unknown.png"                               │
 └─────────────────────────────────────────────────────────────────┘
@@ -1633,8 +1653,8 @@ $$ LANGUAGE plpgsql IMMUTABLE;
     "session_id": 638677842396130000,
     "hand_num": 42,
     "blind_level": "10K/20K",
-    "generated_at": "2026-01-14T10:35:00Z",
-    "data_sources": ["gfx_hand_players", "gfx_hands", "unified_players"]
+    "generated_at": "2026-01-16T10:35:00Z",
+    "data_sources": ["gfx_hand_players", "gfx_hands", "gfx_players", "player_overrides"]
   }
 }
 ```
@@ -1677,13 +1697,15 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 │  2. DB 저장 (gfx_hand_players)                                            │
 │     player_name: "Lipauka"                                                │
 │                                                                           │
-│  3. Manual Override 체크                                                   │
-│     SELECT corrected_name FROM manual_player_overrides                    │
-│     WHERE original_name = 'lipauka'                                       │
+│  3. Player Override 체크 (v2.1.0)                                        │
+│     SELECT override_value FROM player_overrides                           │
+│     WHERE gfx_player_id = :id                                             │
+│       AND field_name = 'name'                                             │
+│       AND active = TRUE                                                   │
 │     → NULL (오버라이드 없음)                                               │
 │                                                                           │
 │  4. SQL 변환                                                              │
-│     UPPER(COALESCE(mo.corrected_name, hp.player_name))                    │
+│     UPPER(COALESCE(po_name.override_value, hp.player_name))              │
 │     = UPPER("Lipauka")                                                    │
 │     = "LIPAUKA"                                                           │
 │                                                                           │

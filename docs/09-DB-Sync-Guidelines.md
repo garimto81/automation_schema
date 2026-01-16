@@ -555,7 +555,49 @@ $$ LANGUAGE plpgsql;
 
 ---
 
-## 9. 관련 문서
+## 9. 스키마 덤프 관리
+
+### 9.1 current_schema_dump.sql 재생성
+
+마이그레이션 적용 후 `docs/current_schema_dump.sql` 파일을 재생성해야 합니다.
+
+```bash
+# Supabase CLI 사용
+supabase db dump --schema public > docs/current_schema_dump.sql
+
+# 또는 psql 직접 사용
+pg_dump --schema-only --no-owner --no-privileges \
+  -h db.xxx.supabase.co -p 5432 -U postgres -d postgres \
+  > docs/current_schema_dump.sql
+```
+
+### 9.2 스키마 정합성 검증
+
+```bash
+# 마이그레이션과 덤프 비교
+diff <(grep "CREATE TABLE" supabase/migrations/*.sql | sort) \
+     <(grep "CREATE TABLE" docs/current_schema_dump.sql | sort)
+
+# 누락된 테이블 확인
+psql -h db.xxx.supabase.co -c "
+  SELECT table_name FROM information_schema.tables
+  WHERE table_schema = 'public'
+  ORDER BY table_name;
+"
+```
+
+### 9.3 재생성 시점
+
+| 시점 | 필수 여부 |
+|------|:--------:|
+| 마이그레이션 추가 후 | **필수** |
+| 테이블/뷰 변경 후 | **필수** |
+| 함수 추가/수정 후 | 권장 |
+| 주간 정기 점검 | 권장 |
+
+---
+
+## 10. 관련 문서
 
 | 문서 | 위치 | 설명 |
 |------|------|------|
@@ -563,6 +605,7 @@ $$ LANGUAGE plpgsql;
 | 07-Supabase-Orchestration | `docs/07-Supabase-Orchestration.md` | Supabase 오케스트레이션 상세 |
 | 01-DATA_FLOW | `docs/01-DATA_FLOW.md` | 전체 데이터 흐름 아키텍처 |
 | 마이그레이션 | `supabase/migrations/` | DB 스키마 마이그레이션 |
+| 스키마 덤프 | `docs/current_schema_dump.sql` | 현재 스키마 스냅샷 |
 
 ---
 
@@ -570,4 +613,5 @@ $$ LANGUAGE plpgsql;
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.1.0 | 2026-01-18 | 스키마 덤프 관리 섹션 추가 |
 | 1.0.0 | 2026-01-17 | 초기 작성 |
