@@ -2,9 +2,80 @@
 
 PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 1.0.0
-**Date**: 2025-01-13
+**Version**: 1.1.0
+**Date**: 2026-01-16
 **Project**: Feature Table Automation (FT-0001)
+
+---
+
+## 0. 스키마 관리 정책
+
+### 0.1 Single Source of Truth (SSOT)
+
+> **이 문서가 GFX JSON 데이터베이스 스키마의 SSOT입니다.**
+
+| 계층 | 파일 | 역할 | 업데이트 주체 |
+|:----:|------|------|:-------------:|
+| **SSOT** | `docs/02-GFX-JSON-DB.md` (이 문서) | 설계 명세 | 인간 (설계자) |
+| 구현 | `gfx_json/migrations/*.sql` | 실행 가능한 DDL | 이 문서 기준 동기화 |
+| 구현 | `gfx_json/src/sync_agent/models/*.py` | Python 모델 | 이 문서 기준 동기화 |
+| 실행 | Supabase DB (public 스키마) | 실제 데이터 저장소 | Migration SQL 적용 |
+
+### 0.2 변경 관리 프로세스
+
+스키마 변경이 필요한 경우 아래 프로세스를 따릅니다:
+
+```
+┌─────────────────┐
+│ 1. PRD 수정     │  ← 설계자가 이 문서 업데이트
+│ (이 문서)       │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 2. Migration SQL│  ← PRD 변경사항 반영
+│ 업데이트        │     gfx_json/migrations/*.sql
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 3. Python 모델  │  ← 필요 시 코드 업데이트
+│ 업데이트        │     gfx_json/src/sync_agent/models/
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 4. Supabase DB  │  ← supabase db push 또는
+│ Migration 적용  │     ALTER TABLE 직접 실행
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ 5. 검증 및 테스트│
+└─────────────────┘
+```
+
+### 0.3 변경 체크리스트
+
+스키마 변경 시 아래 항목을 확인합니다:
+
+- [ ] PRD (이 문서) 업데이트 완료
+- [ ] Migration SQL 동기화 (`gfx_json/migrations/001_create_normalized_tables.sql`)
+- [ ] Python 모델 동기화 (해당하는 경우)
+- [ ] Transformer 동기화 (해당하는 경우)
+- [ ] `schema-analysis-report.md` 업데이트
+- [ ] Supabase DB에 Migration 적용
+- [ ] 테스트 통과 확인
+
+### 0.4 관련 파일
+
+| 파일 | 위치 | 설명 |
+|------|------|------|
+| Migration SQL | `C:\claude\gfx_json\migrations\001_create_normalized_tables.sql` | DDL 실행 파일 |
+| Player 모델 | `C:\claude\gfx_json\src\sync_agent\models\player.py` | HandPlayerRecord 등 |
+| Player Transformer | `C:\claude\gfx_json\src\sync_agent\transformers\player_transformer.py` | JSON → 모델 변환 |
+| 분석 보고서 | `C:\claude\gfx_json\docs\schema-analysis-report.md` | 정합성 분석 |
+| Migration 가이드 | `C:\claude\gfx_json\docs\SCHEMA_MIGRATION_GUIDE.md` | 실행 절차 |
 
 ---
 
@@ -1223,3 +1294,109 @@ CREATE POLICY "sync_log_all_service"
 - `as` = Ace of Spades
 - `10d` = Ten of Diamonds
 - `kh` = King of Hearts
+
+---
+
+## 12. json 스키마 → public 스키마 연결 전략
+
+### 12.1 현재 상황
+
+Supabase DB에 두 개의 독립적인 GFX 관련 스키마가 존재:
+
+| 스키마 | 테이블 수 | 목적 | 생성 방식 |
+|--------|:--------:|------|-----------|
+| `json` | 6개 | PokerGFX RFID 실시간 파싱 | 수동 (Supabase 대시보드) |
+| `public` | 32개 | AEP 그래픽 렌더링 | 마이그레이션 파일 |
+
+**문제점**: 두 스키마가 서로 연결되지 않아 데이터 활용 불가
+
+### 12.2 테이블 매핑
+
+| json 스키마 | public 스키마 | 필드 차이 |
+|------------|--------------|----------|
+| `json.gfx_sessions` | `public.gfx_sessions` | gfx_id ↔ session_id |
+| `json.hands` | `public.gfx_hands` | hand_number ↔ hand_num |
+| `json.hand_players` | `public.gfx_hand_players` | 대부분 일치 |
+| `json.hand_actions` | `public.gfx_events` | 상세 필드 추가 필요 |
+| `json.hand_cards` | (신규) `public.gfx_hand_cards` | public에 없음 |
+| `json.hand_results` | (신규) `public.gfx_hand_results` | public에 없음 |
+
+### 12.3 권장 전략: 옵션 D (코드 수정 + 스키마 확장)
+
+**선택 이유**:
+1. 단일 진실 소스 (SSOT) 확보
+2. 트리거/뷰 오버헤드 없는 최적 성능
+3. 기존 AEP 렌더링 함수 재사용 가능
+
+### 12.4 구현 계획
+
+| Phase | 작업 | 예상 기간 |
+|-------|------|:--------:|
+| 1 | public 스키마 확장 (ALTER TABLE) | 1일 |
+| 2 | 신규 테이블 추가 (gfx_hand_cards, gfx_hand_results) | 1일 |
+| 3 | gfx_json 코드 수정 (필드 매핑 레이어) | 2-3일 |
+| 4 | 데이터 마이그레이션 (json → public) | 1일 |
+| 5 | json 스키마 폐기 | 1일 |
+
+### 12.5 스키마 확장 SQL
+
+#### gfx_hands 확장
+```sql
+ALTER TABLE public.gfx_hands ADD COLUMN IF NOT EXISTS
+    grade char(1) CHECK (grade IN ('A','B','C','D','F')),
+    is_premium boolean DEFAULT false,
+    is_showdown boolean DEFAULT false,
+    grade_factors jsonb DEFAULT '{}',
+    flop_cards jsonb,
+    turn_card varchar(3),
+    river_card varchar(3);
+```
+
+#### 신규 테이블: gfx_hand_cards
+```sql
+CREATE TABLE public.gfx_hand_cards (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    hand_id uuid NOT NULL REFERENCES public.gfx_hands(id) ON DELETE CASCADE,
+    card_rank varchar(2) NOT NULL,
+    card_suit char(1) NOT NULL,
+    card_type varchar(20) NOT NULL,
+    seat_number integer,
+    card_order integer,
+    created_at timestamptz DEFAULT now()
+);
+```
+
+#### 신규 테이블: gfx_hand_results
+```sql
+CREATE TABLE public.gfx_hand_results (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    hand_id uuid NOT NULL REFERENCES public.gfx_hands(id) ON DELETE CASCADE,
+    seat_number integer NOT NULL,
+    is_winner boolean NOT NULL,
+    won_amount numeric(12,2),
+    hand_rank varchar(50),
+    rank_value integer,
+    best_five jsonb,
+    created_at timestamptz DEFAULT now()
+);
+```
+
+### 12.6 gfx_json 코드 수정
+
+**필드 매핑 레이어**:
+```python
+# field_mapper.py
+FIELD_MAPPING = {
+    "gfx_sessions": {"gfx_id": "session_id", "source_file": "file_name"},
+    "gfx_hands": {"hand_number": "hand_num"},
+    "gfx_hand_players": {"start_stack": "start_stack_amt"},
+    "gfx_events": {"action_order": "event_order", "bet_amount": "bet_amt"}
+}
+```
+
+### 12.7 마이그레이션 후 json 스키마 폐기
+
+```sql
+-- 검증 완료 후 실행
+DROP SCHEMA IF EXISTS json CASCADE;
+```
