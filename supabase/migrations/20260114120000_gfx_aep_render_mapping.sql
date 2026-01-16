@@ -7,47 +7,53 @@
 -- ============================================================================
 
 -- ============================================================================
--- ENUM Types
+-- ENUM Types (IF NOT EXISTS 패턴)
 -- ============================================================================
 
 -- AEP 컴포지션 카테고리
-CREATE TYPE aep_composition_category AS ENUM (
-    'chip_display',      -- 칩 표시 (7개)
-    'payout',            -- 상금표 (3개)
-    'event_info',        -- 이벤트 정보 (5개)
-    'schedule',          -- 방송 일정 (1개)
-    'staff',             -- 스태프 (2개)
-    'player_info',       -- 플레이어 정보 (4개)
-    'elimination',       -- 탈락 (2개)
-    'transition',        -- 전환 화면 (2개)
-    'other'              -- 기타
-);
+DO $$ BEGIN
+    CREATE TYPE aep_composition_category AS ENUM (
+        'chip_display',      -- 칩 표시 (7개)
+        'payout',            -- 상금표 (3개)
+        'event_info',        -- 이벤트 정보 (5개)
+        'schedule',          -- 방송 일정 (1개)
+        'staff',             -- 스태프 (2개)
+        'player_info',       -- 플레이어 정보 (4개)
+        'elimination',       -- 탈락 (2개)
+        'transition',        -- 전환 화면 (2개)
+        'other'              -- 기타
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- 변환 함수 타입
-CREATE TYPE aep_transform_type AS ENUM (
-    'UPPER',             -- 대문자 변환
-    'LOWER',             -- 소문자 변환
-    'format_chips',      -- 칩 포맷 (1,500,000)
-    'format_bbs',        -- BB 포맷 (75.0)
-    'format_currency',   -- 통화 포맷 ($1,000,000)
-    'format_date',       -- 날짜 포맷 (Jan 14)
-    'format_time',       -- 시간 포맷 (05:30 PM)
-    'format_percent',    -- 퍼센트 포맷 (45.5%)
-    'format_number',     -- 숫자 포맷 (1,234)
-    'get_flag_path',     -- 국기 경로 (Flag/Korea.png)
-    'direct',            -- 변환 없음
-    'custom'             -- 커스텀 변환
-);
+DO $$ BEGIN
+    CREATE TYPE aep_transform_type AS ENUM (
+        'UPPER',             -- 대문자 변환
+        'LOWER',             -- 소문자 변환
+        'format_chips',      -- 칩 포맷 (1,500,000)
+        'format_bbs',        -- BB 포맷 (75.0)
+        'format_currency',   -- 통화 포맷 ($1,000,000)
+        'format_date',       -- 날짜 포맷 (Jan 14)
+        'format_time',       -- 시간 포맷 (05:30 PM)
+        'format_percent',    -- 퍼센트 포맷 (45.5%)
+        'format_number',     -- 숫자 포맷 (1,234)
+        'get_flag_path',     -- 국기 경로 (Flag/Korea.png)
+        'direct',            -- 변환 없음
+        'custom'             -- 커스텀 변환
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ============================================================================
--- Tables
+-- Tables (IF NOT EXISTS 패턴 - 부분 적용 대응)
 -- ============================================================================
 
 -- ============================================================================
 -- gfx_aep_field_mappings: GFX 데이터 → AEP 컴포지션 필드 매핑 규칙
 -- ============================================================================
 
-CREATE TABLE gfx_aep_field_mappings (
+CREATE TABLE IF NOT EXISTS gfx_aep_field_mappings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- 컴포지션 식별
@@ -94,14 +100,14 @@ CREATE TABLE gfx_aep_field_mappings (
 );
 
 -- 복합 유니크 인덱스 (COALESCE 사용을 위해 INDEX로 정의)
-CREATE UNIQUE INDEX uq_gfx_aep_mapping
+CREATE UNIQUE INDEX IF NOT EXISTS uq_gfx_aep_mapping
     ON gfx_aep_field_mappings(composition_name, target_field_key, COALESCE(slot_range_start, 0));
 
 -- ============================================================================
 -- gfx_aep_compositions: AEP 컴포지션 메타데이터
 -- ============================================================================
 
-CREATE TABLE gfx_aep_compositions (
+CREATE TABLE IF NOT EXISTS gfx_aep_compositions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
     -- 컴포지션 정보
@@ -673,60 +679,66 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- ============================================================================
--- Indexes
+-- Indexes (IF NOT EXISTS 패턴)
 -- ============================================================================
 
-CREATE INDEX idx_gfx_aep_mapping_comp ON gfx_aep_field_mappings(composition_name);
-CREATE INDEX idx_gfx_aep_mapping_category ON gfx_aep_field_mappings(composition_category);
-CREATE INDEX idx_gfx_aep_mapping_active ON gfx_aep_field_mappings(is_active) WHERE is_active = TRUE;
-CREATE INDEX idx_gfx_aep_mapping_source ON gfx_aep_field_mappings(source_table);
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_mapping_comp ON gfx_aep_field_mappings(composition_name);
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_mapping_category ON gfx_aep_field_mappings(composition_category);
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_mapping_active ON gfx_aep_field_mappings(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_mapping_source ON gfx_aep_field_mappings(source_table);
 
-CREATE INDEX idx_gfx_aep_comp_name ON gfx_aep_compositions(name);
-CREATE INDEX idx_gfx_aep_comp_category ON gfx_aep_compositions(category);
-CREATE INDEX idx_gfx_aep_comp_active ON gfx_aep_compositions(is_active) WHERE is_active = TRUE;
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_comp_name ON gfx_aep_compositions(name);
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_comp_category ON gfx_aep_compositions(category);
+CREATE INDEX IF NOT EXISTS idx_gfx_aep_comp_active ON gfx_aep_compositions(is_active) WHERE is_active = TRUE;
 
 -- ============================================================================
--- Triggers
+-- Triggers (DROP IF EXISTS + CREATE 패턴)
 -- ============================================================================
 
 -- updated_at 자동 업데이트
+DROP TRIGGER IF EXISTS trigger_gfx_aep_mapping_updated_at ON gfx_aep_field_mappings;
 CREATE TRIGGER trigger_gfx_aep_mapping_updated_at
     BEFORE UPDATE ON gfx_aep_field_mappings
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS trigger_gfx_aep_comp_updated_at ON gfx_aep_compositions;
 CREATE TRIGGER trigger_gfx_aep_comp_updated_at
     BEFORE UPDATE ON gfx_aep_compositions
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================================
--- RLS Policies
+-- RLS Policies (DROP IF EXISTS + CREATE 패턴)
 -- ============================================================================
 
 ALTER TABLE gfx_aep_field_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gfx_aep_compositions ENABLE ROW LEVEL SECURITY;
 
 -- 읽기 권한 (authenticated)
+DROP POLICY IF EXISTS "gfx_aep_mapping_select_authenticated" ON gfx_aep_field_mappings;
 CREATE POLICY "gfx_aep_mapping_select_authenticated"
     ON gfx_aep_field_mappings FOR SELECT
     USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "gfx_aep_comp_select_authenticated" ON gfx_aep_compositions;
 CREATE POLICY "gfx_aep_comp_select_authenticated"
     ON gfx_aep_compositions FOR SELECT
     USING (auth.role() = 'authenticated');
 
 -- 전체 권한 (service_role)
+DROP POLICY IF EXISTS "gfx_aep_mapping_all_service" ON gfx_aep_field_mappings;
 CREATE POLICY "gfx_aep_mapping_all_service"
     ON gfx_aep_field_mappings FOR ALL
     USING (auth.role() = 'service_role');
 
+DROP POLICY IF EXISTS "gfx_aep_comp_all_service" ON gfx_aep_compositions;
 CREATE POLICY "gfx_aep_comp_all_service"
     ON gfx_aep_compositions FOR ALL
     USING (auth.role() = 'service_role');
 
 -- ============================================================================
--- Initial Data: 26개 컴포지션 메타데이터
+-- Initial Data: 26개 컴포지션 메타데이터 (ON CONFLICT DO NOTHING 패턴)
 -- ============================================================================
 
 INSERT INTO gfx_aep_compositions (name, category, display_name, slot_count, slot_field_keys, single_field_keys) VALUES
@@ -770,10 +782,11 @@ INSERT INTO gfx_aep_compositions (name, category, display_name, slot_count, slot
 
 -- transition (2개)
 ('1-NEXT STREAM STARTING SOON', 'transition', 'Stream Starting Soon', 0, NULL, ARRAY['wsop_vlogger_program']),
-('Block Transition Level-Blinds', 'transition', 'Level/Blinds Transition', 0, NULL, ARRAY['level', 'blinds', 'duration']);
+('Block Transition Level-Blinds', 'transition', 'Level/Blinds Transition', 0, NULL, ARRAY['level', 'blinds', 'duration'])
+ON CONFLICT (name) DO NOTHING;
 
 -- ============================================================================
--- Initial Data: 주요 컴포지션 필드 매핑 규칙
+-- Initial Data: 주요 컴포지션 필드 매핑 규칙 (ON CONFLICT DO NOTHING 패턴)
 -- ============================================================================
 
 -- _MAIN Mini Chip Count 매핑
@@ -782,25 +795,29 @@ INSERT INTO gfx_aep_field_mappings (composition_name, composition_category, targ
 ('_MAIN Mini Chip Count', 'chip_display', 'chips', 1, 9, 'gfx_hand_players', 'end_stack_amt', 'format_chips', 'end_stack_amt DESC', 'sitting_out = FALSE', ''),
 ('_MAIN Mini Chip Count', 'chip_display', 'bbs', 1, 9, 'gfx_hand_players', 'end_stack_amt', 'format_bbs', 'end_stack_amt DESC', 'sitting_out = FALSE', ''),
 ('_MAIN Mini Chip Count', 'chip_display', 'rank', 1, 9, 'gfx_hand_players', 'ROW_NUMBER()', 'direct', 'end_stack_amt DESC', 'sitting_out = FALSE', ''),
-('_MAIN Mini Chip Count', 'chip_display', 'flag', 1, 9, 'player_overrides', 'country_code', 'get_flag_path', 'end_stack_amt DESC', NULL, 'Flag/Unknown.png');
+('_MAIN Mini Chip Count', 'chip_display', 'flag', 1, 9, 'player_overrides', 'country_code', 'get_flag_path', 'end_stack_amt DESC', NULL, 'Flag/Unknown.png')
+ON CONFLICT DO NOTHING;
 
 -- Payouts 매핑
 INSERT INTO gfx_aep_field_mappings (composition_name, composition_category, target_field_key, slot_range_start, slot_range_end, source_table, source_column, transform, slot_order_by, default_value) VALUES
 ('Payouts', 'payout', 'rank', 1, 9, 'wsop_events', 'payouts->place', 'direct', 'place ASC', '-'),
-('Payouts', 'payout', 'prize', 1, 9, 'wsop_events', 'payouts->amount', 'format_currency', 'place ASC', '$0');
+('Payouts', 'payout', 'prize', 1, 9, 'wsop_events', 'payouts->amount', 'format_currency', 'place ASC', '$0')
+ON CONFLICT DO NOTHING;
 
 -- Broadcast Schedule 매핑
 INSERT INTO gfx_aep_field_mappings (composition_name, composition_category, target_field_key, slot_range_start, slot_range_end, source_table, source_column, transform, slot_order_by, default_value) VALUES
 ('Broadcast Schedule', 'schedule', 'date', 1, 6, 'broadcast_sessions', 'broadcast_date', 'format_date', 'broadcast_date ASC', ''),
 ('Broadcast Schedule', 'schedule', 'time', 1, 6, 'broadcast_sessions', 'scheduled_start', 'format_time', 'broadcast_date ASC', ''),
-('Broadcast Schedule', 'schedule', 'event_name', 1, 6, 'broadcast_sessions', 'event_name', 'direct', 'broadcast_date ASC', '');
+('Broadcast Schedule', 'schedule', 'event_name', 1, 6, 'broadcast_sessions', 'event_name', 'direct', 'broadcast_date ASC', '')
+ON CONFLICT DO NOTHING;
 
 -- Elimination 매핑
 INSERT INTO gfx_aep_field_mappings (composition_name, composition_category, target_field_key, slot_range_start, slot_range_end, source_table, source_column, transform, slot_order_by, default_value) VALUES
 ('Elimination', 'elimination', 'name', 1, 2, 'gfx_hand_players', 'player_name', 'UPPER', 'elimination_rank DESC', ''),
 ('Elimination', 'elimination', 'rank', 1, 2, 'gfx_hand_players', 'elimination_rank', 'direct', 'elimination_rank DESC', ''),
 ('Elimination', 'elimination', 'prize', 1, 2, 'gfx_sessions', 'payouts[elimination_rank]', 'format_currency', 'elimination_rank DESC', '$0'),
-('Elimination', 'elimination', 'flag', 1, 2, 'player_overrides', 'country_code', 'get_flag_path', 'elimination_rank DESC', 'Flag/Unknown.png');
+('Elimination', 'elimination', 'flag', 1, 2, 'player_overrides', 'country_code', 'get_flag_path', 'elimination_rank DESC', 'Flag/Unknown.png')
+ON CONFLICT DO NOTHING;
 
 -- ============================================================================
 -- Comments

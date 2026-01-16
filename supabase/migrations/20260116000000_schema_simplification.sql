@@ -6,6 +6,14 @@
 -- ============================================================================
 
 -- ============================================================================
+-- Phase 0: 종속된 뷰들 먼저 삭제
+-- ============================================================================
+
+DROP VIEW IF EXISTS unified_players CASCADE;
+DROP VIEW IF EXISTS v_render_chip_display CASCADE;
+DROP VIEW IF EXISTS v_render_elimination CASCADE;
+
+-- ============================================================================
 -- Phase 1: manual_players 관련 테이블 삭제
 -- ============================================================================
 
@@ -143,7 +151,7 @@ SELECT
     wcc.table_num,
     wcc.seat_num,
     wcc.recorded_at,
-    wcc.source AS data_source
+    wcc.source::TEXT AS data_source
 FROM wsop_chip_counts wcc
 LEFT JOIN wsop_players wp ON wcc.player_id = wp.id
 
@@ -162,7 +170,7 @@ SELECT
     NULL::INTEGER AS table_num,
     ghp.seat_num,
     gh.start_time AS recorded_at,
-    'gfx_hand' AS data_source
+    'gfx_hand'::TEXT AS data_source
 FROM gfx_hand_players ghp
 JOIN gfx_hands gh ON ghp.hand_id = gh.id;
 

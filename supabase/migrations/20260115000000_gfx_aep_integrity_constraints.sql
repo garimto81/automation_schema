@@ -9,10 +9,13 @@
 -- 1. FK 제약조건: composition_name → gfx_aep_compositions.name
 -- ============================================================================
 
-ALTER TABLE gfx_aep_field_mappings
-ADD CONSTRAINT fk_mapping_composition
-FOREIGN KEY (composition_name) REFERENCES gfx_aep_compositions(name)
-ON UPDATE CASCADE ON DELETE RESTRICT;
+DO $$ BEGIN
+    ALTER TABLE gfx_aep_field_mappings
+    ADD CONSTRAINT fk_mapping_composition
+    FOREIGN KEY (composition_name) REFERENCES gfx_aep_compositions(name)
+    ON UPDATE CASCADE ON DELETE RESTRICT;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 COMMENT ON CONSTRAINT fk_mapping_composition ON gfx_aep_field_mappings IS
     '컴포지션 이름 참조 무결성: 존재하지 않는 컴포지션 참조 방지';
@@ -21,12 +24,15 @@ COMMENT ON CONSTRAINT fk_mapping_composition ON gfx_aep_field_mappings IS
 -- 2. CHECK 제약조건: 슬롯 범위 유효성
 -- ============================================================================
 
-ALTER TABLE gfx_aep_field_mappings
-ADD CONSTRAINT chk_slot_range_valid
-CHECK (
-    slot_range_start IS NULL OR slot_range_end IS NULL OR
-    (slot_range_start >= 1 AND slot_range_end >= slot_range_start)
-);
+DO $$ BEGIN
+    ALTER TABLE gfx_aep_field_mappings
+    ADD CONSTRAINT chk_slot_range_valid
+    CHECK (
+        slot_range_start IS NULL OR slot_range_end IS NULL OR
+        (slot_range_start >= 1 AND slot_range_end >= slot_range_start)
+    );
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 COMMENT ON CONSTRAINT chk_slot_range_valid ON gfx_aep_field_mappings IS
     '슬롯 범위 유효성: start >= 1, end >= start';
@@ -35,9 +41,12 @@ COMMENT ON CONSTRAINT chk_slot_range_valid ON gfx_aep_field_mappings IS
 -- 3. CHECK 제약조건: 정렬 방향 제한
 -- ============================================================================
 
-ALTER TABLE gfx_aep_field_mappings
-ADD CONSTRAINT chk_order_direction
-CHECK (slot_order_direction IS NULL OR slot_order_direction IN ('ASC', 'DESC'));
+DO $$ BEGIN
+    ALTER TABLE gfx_aep_field_mappings
+    ADD CONSTRAINT chk_order_direction
+    CHECK (slot_order_direction IS NULL OR slot_order_direction IN ('ASC', 'DESC'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 COMMENT ON CONSTRAINT chk_order_direction ON gfx_aep_field_mappings IS
     '정렬 방향 제한: ASC 또는 DESC만 허용';
@@ -46,9 +55,12 @@ COMMENT ON CONSTRAINT chk_order_direction ON gfx_aep_field_mappings IS
 -- 4. CHECK 제약조건: 우선순위 범위
 -- ============================================================================
 
-ALTER TABLE gfx_aep_field_mappings
-ADD CONSTRAINT chk_priority_range
-CHECK (priority >= 0 AND priority <= 1000);
+DO $$ BEGIN
+    ALTER TABLE gfx_aep_field_mappings
+    ADD CONSTRAINT chk_priority_range
+    CHECK (priority >= 0 AND priority <= 1000);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 COMMENT ON CONSTRAINT chk_priority_range ON gfx_aep_field_mappings IS
     '우선순위 범위: 0-1000 (낮을수록 높은 우선순위)';
@@ -101,6 +113,7 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION validate_mapping_slot_range() IS
     '매핑 규칙의 슬롯 범위와 필드 키 유효성 검증';
 
+DROP TRIGGER IF EXISTS trigger_validate_mapping_slot_range ON gfx_aep_field_mappings;
 CREATE TRIGGER trigger_validate_mapping_slot_range
 BEFORE INSERT OR UPDATE ON gfx_aep_field_mappings
 FOR EACH ROW
@@ -126,6 +139,7 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION validate_transform_params() IS
     'transform 파라미터 유효성 검증 (향후 확장용)';
 
+DROP TRIGGER IF EXISTS trigger_validate_transform_params ON gfx_aep_field_mappings;
 CREATE TRIGGER trigger_validate_transform_params
 BEFORE INSERT OR UPDATE ON gfx_aep_field_mappings
 FOR EACH ROW

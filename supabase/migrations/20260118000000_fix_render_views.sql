@@ -13,7 +13,8 @@
 -- - player_overrides (name, country_code) 조인 추가
 -- ============================================================================
 
-CREATE OR REPLACE VIEW v_render_chip_display AS
+DROP VIEW IF EXISTS v_render_chip_display CASCADE;
+CREATE VIEW v_render_chip_display AS
 SELECT
     gs.session_id,
     gh.hand_num,
@@ -61,7 +62,8 @@ ORDER BY gs.session_id, gh.hand_num, ghp.end_stack_amt DESC;
 -- - player_overrides (name, country_code) 조인 추가
 -- ============================================================================
 
-CREATE OR REPLACE VIEW v_render_elimination AS
+DROP VIEW IF EXISTS v_render_elimination CASCADE;
+CREATE VIEW v_render_elimination AS
 SELECT
     gs.session_id,
     gh.hand_num,
