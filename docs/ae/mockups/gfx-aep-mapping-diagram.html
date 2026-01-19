@@ -1,0 +1,835 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GFX DB → AEP Mapping Diagram (26 Compositions)</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: #e4e4e4;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #00d9ff;
+            margin-bottom: 10px;
+            font-size: 28px;
+            text-shadow: 0 0 10px rgba(0, 217, 255, 0.5);
+        }
+        .subtitle {
+            text-align: center;
+            color: #888;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        /* Data Source Section */
+        .source-section {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .source-box {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid;
+            border-radius: 12px;
+            padding: 15px 25px;
+            text-align: center;
+            min-width: 200px;
+        }
+        .source-box.primary {
+            border-color: #00d9ff;
+            box-shadow: 0 0 15px rgba(0, 217, 255, 0.3);
+        }
+        .source-box.secondary {
+            border-color: #ff9f43;
+            box-shadow: 0 0 15px rgba(255, 159, 67, 0.3);
+        }
+        .source-box.override {
+            border-color: #ee5a24;
+            box-shadow: 0 0 15px rgba(238, 90, 36, 0.3);
+        }
+        .source-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            opacity: 0.7;
+        }
+        .source-title {
+            font-size: 18px;
+            font-weight: bold;
+        }
+        .source-tables {
+            font-size: 11px;
+            margin-top: 8px;
+            color: #aaa;
+        }
+
+        /* Arrow */
+        .arrow-down {
+            text-align: center;
+            font-size: 40px;
+            color: #00d9ff;
+            margin: 20px 0;
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        /* Category Grid */
+        .category-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .category {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .category-header {
+            padding: 12px 20px;
+            font-weight: bold;
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .category-count {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 3px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+        }
+
+        /* Category Colors */
+        .chip_display .category-header { background: linear-gradient(90deg, #00d9ff, #0096c7); }
+        .payout .category-header { background: linear-gradient(90deg, #ffd93d, #ff9f43); color: #1a1a2e; }
+        .event_info .category-header { background: linear-gradient(90deg, #6c5ce7, #a29bfe); }
+        .schedule .category-header { background: linear-gradient(90deg, #00b894, #55efc4); color: #1a1a2e; }
+        .staff .category-header { background: linear-gradient(90deg, #fd79a8, #e84393); }
+        .player_info .category-header { background: linear-gradient(90deg, #74b9ff, #0984e3); }
+        .elimination .category-header { background: linear-gradient(90deg, #ff7675, #d63031); }
+        .transition .category-header { background: linear-gradient(90deg, #636e72, #b2bec3); color: #1a1a2e; }
+        .other .category-header { background: linear-gradient(90deg, #2d3436, #636e72); }
+
+        /* Composition Cards */
+        .composition-list {
+            padding: 10px;
+        }
+        .composition {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            padding: 12px 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .composition:hover {
+            transform: translateX(5px);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+        .composition:last-child {
+            margin-bottom: 0;
+        }
+
+        .chip_display .composition { border-left-color: #00d9ff; }
+        .payout .composition { border-left-color: #ffd93d; }
+        .event_info .composition { border-left-color: #6c5ce7; }
+        .schedule .composition { border-left-color: #00b894; }
+        .staff .composition { border-left-color: #fd79a8; }
+        .player_info .composition { border-left-color: #74b9ff; }
+        .elimination .composition { border-left-color: #ff7675; }
+        .transition .composition { border-left-color: #636e72; }
+        .other .composition { border-left-color: #2d3436; }
+
+        .comp-name {
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 8px;
+            color: #fff;
+        }
+        .comp-meta {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 8px;
+        }
+        .slots-badge {
+            background: rgba(0, 217, 255, 0.2);
+            color: #00d9ff;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .source-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .source-badge.gfx { background: rgba(0, 217, 255, 0.2); color: #00d9ff; }
+        .source-badge.wsop { background: rgba(255, 159, 67, 0.2); color: #ff9f43; }
+        .source-badge.manual { background: rgba(238, 90, 36, 0.2); color: #ee5a24; }
+        .source-badge.static { background: rgba(99, 110, 114, 0.3); color: #b2bec3; }
+
+        .fields-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 5px;
+        }
+        .field-tag {
+            background: rgba(255, 255, 255, 0.08);
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #ccc;
+            font-family: 'Consolas', monospace;
+        }
+        .field-tag.transform {
+            color: #ffd93d;
+            border: 1px dashed rgba(255, 217, 61, 0.5);
+        }
+
+        /* Summary Section */
+        .summary {
+            margin-top: 30px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .summary h3 {
+            color: #00d9ff;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .summary-item {
+            text-align: center;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+        }
+        .summary-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00d9ff;
+        }
+        .summary-label {
+            font-size: 12px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        /* Transform Functions */
+        .transform-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 217, 61, 0.05);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 217, 61, 0.2);
+        }
+        .transform-section h4 {
+            color: #ffd93d;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+        .transform-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .transform-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-family: 'Consolas', monospace;
+            font-size: 11px;
+        }
+        .transform-item code {
+            color: #ffd93d;
+        }
+        .transform-item span {
+            color: #888;
+            margin-left: 8px;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        .legend-color {
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+        }
+        .legend-color.primary { background: #00d9ff; }
+        .legend-color.secondary { background: #ff9f43; }
+        .legend-color.override { background: #ee5a24; }
+        .legend-color.static { background: #636e72; }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            color: #666;
+            font-size: 11px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GFX DB → AEP Composition Mapping</h1>
+        <p class="subtitle">08-GFX-AEP-Mapping.md v2.1.0 | 26 Compositions | 7 Categories</p>
+
+        <!-- Data Sources -->
+        <div class="source-section">
+            <div class="source-box primary">
+                <div class="source-label">1️⃣ Primary</div>
+                <div class="source-title">GFX JSON DB</div>
+                <div class="source-tables">gfx_sessions, gfx_hands, gfx_hand_players, gfx_players</div>
+            </div>
+            <div class="source-box secondary">
+                <div class="source-label">2️⃣ Secondary</div>
+                <div class="source-title">WSOP+ DB</div>
+                <div class="source-tables">wsop_events, wsop_standings, broadcast_sessions</div>
+            </div>
+            <div class="source-box override">
+                <div class="source-label">3️⃣ Override</div>
+                <div class="source-title">Manual DB</div>
+                <div class="source-tables">player_overrides, gfx_players</div>
+            </div>
+        </div>
+
+        <div class="arrow-down">⬇</div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color primary"></div>
+                <span>GFX (Primary)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color secondary"></div>
+                <span>WSOP+ (Secondary)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color override"></div>
+                <span>Manual (Override)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color static"></div>
+                <span>Static</span>
+            </div>
+        </div>
+
+        <!-- Category Grid -->
+        <div class="category-grid">
+
+            <!-- chip_display (6) -->
+            <div class="category chip_display">
+                <div class="category-header">
+                    <span>chip_display</span>
+                    <span class="category-count">6</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">_MAIN Mini Chip Count</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">9 slots</span>
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">chips</span>
+                            <span class="field-tag">bbs</span>
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag">flag</span>
+                            <span class="field-tag transform">UPPER</span>
+                            <span class="field-tag transform">format_chips</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">_SUB_Mini Chip Count</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">9 slots</span>
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">chips</span>
+                            <span class="field-tag">bbs</span>
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag transform">format_bbs</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Chips In Play x3</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">3 slots</span>
+                            <span class="source-badge gfx">gfx_hands.blinds</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">chips_in_play</span>
+                            <span class="field-tag">level</span>
+                            <span class="field-tag transform">format_chips</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Chips In Play x4</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">4 slots</span>
+                            <span class="source-badge gfx">gfx_hands.blinds</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">chips_in_play</span>
+                            <span class="field-tag">level</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Chip Comparison (v2.0)</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">Dynamic</span>
+                            <span class="source-badge gfx">gfx_hand_players + UI</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">selected_player_%</span>
+                            <span class="field-tag">others_%</span>
+                            <span class="field-tag transform">format_percent</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Chip Flow (v2.0)</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">Array</span>
+                            <span class="source-badge gfx">gfx_hand_players history</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">chips_10h[]</span>
+                            <span class="field-tag">chips_20h[]</span>
+                            <span class="field-tag">chips_30h[]</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- payout (3) -->
+            <div class="category payout">
+                <div class="category-header">
+                    <span>payout</span>
+                    <span class="category-count">3</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">Payouts</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">9 slots</span>
+                            <span class="source-badge wsop">wsop_events.payouts</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag">prize</span>
+                            <span class="field-tag">event_name</span>
+                            <span class="field-tag transform">format_currency</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Payouts 등수 바꾸기 가능</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">11 slots</span>
+                            <span class="source-badge wsop">wsop_events.payouts</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag">prize</span>
+                            <span class="field-tag">start_rank</span>
+                            <span class="field-tag transform">format_currency</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">_Mini Payout</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">9 slots</span>
+                            <span class="source-badge gfx">gfx_sessions.payouts</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">prize</span>
+                            <span class="field-tag">rank</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- event_info (4) -->
+            <div class="category event_info">
+                <div class="category-header">
+                    <span>event_info</span>
+                    <span class="category-count">4</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">Block Transition INFO</div>
+                        <div class="comp-meta">
+                            <span class="source-badge wsop">wsop_events + 계산</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">text_제목</span>
+                            <span class="field-tag">text_내용_2줄</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Event info</div>
+                        <div class="comp-meta">
+                            <span class="source-badge wsop">wsop_events</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">buy-in</span>
+                            <span class="field-tag">total_prize_pool</span>
+                            <span class="field-tag">entrants</span>
+                            <span class="field-tag">places_paid</span>
+                            <span class="field-tag transform">format_currency</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Event name</div>
+                        <div class="comp-meta">
+                            <span class="source-badge wsop">wsop_events</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">event_name</span>
+                            <span class="field-tag">wsop_super_circuit_cyprus</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Location</div>
+                        <div class="comp-meta">
+                            <span class="source-badge static">정적/수동</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">merit_royal_diamond_hotel</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- schedule (1) -->
+            <div class="category schedule">
+                <div class="category-header">
+                    <span>schedule</span>
+                    <span class="category-count">1</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">Broadcast Schedule</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">6 slots</span>
+                            <span class="source-badge wsop">broadcast_sessions</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">date 1~6</span>
+                            <span class="field-tag">event 1~6</span>
+                            <span class="field-tag">time 1~6</span>
+                            <span class="field-tag transform">format_date</span>
+                            <span class="field-tag transform">format_time</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- staff (2) -->
+            <div class="category staff">
+                <div class="category-header">
+                    <span>staff</span>
+                    <span class="category-count">2</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">Commentator</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">2 slots</span>
+                            <span class="source-badge manual">TODO: broadcast_staff</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">sub</span>
+                            <span class="field-tag">commentary</span>
+                            <span class="field-tag">text_제목</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">Reporter</div>
+                        <div class="comp-meta">
+                            <span class="slots-badge">2 slots</span>
+                            <span class="source-badge manual">TODO: broadcast_staff</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">sub</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- player_info (4) -->
+            <div class="category player_info">
+                <div class="category-header">
+                    <span>player_info</span>
+                    <span class="category-count">4</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">NAME</div>
+                        <div class="comp-meta">
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                            <span class="source-badge manual">player_overrides</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">player_name</span>
+                            <span class="field-tag">flag</span>
+                            <span class="field-tag">chips</span>
+                            <span class="field-tag">bbs</span>
+                            <span class="field-tag transform">UPPER</span>
+                            <span class="field-tag transform">get_flag_path</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">NAME 1줄</div>
+                        <div class="comp-meta">
+                            <span class="source-badge wsop">wsop+ (Manual)</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">player_name</span>
+                            <span class="field-tag">flag</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">NAME 2줄 (국기 빼고)</div>
+                        <div class="comp-meta">
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">player_name</span>
+                            <span class="field-tag">chips</span>
+                            <span class="field-tag">bbs</span>
+                            <span class="field-tag transform">format_chips</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">NAME 3줄+ (v2.0)</div>
+                        <div class="comp-meta">
+                            <span class="source-badge gfx">gfx_hand_players history</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">player_name</span>
+                            <span class="field-tag">chips_N_hands_ago</span>
+                            <span class="field-tag">vpip</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- elimination (2) -->
+            <div class="category elimination">
+                <div class="category-header">
+                    <span>elimination</span>
+                    <span class="category-count">2</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">Elimination</div>
+                        <div class="comp-meta">
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                            <span class="source-badge wsop">wsop_events.payouts</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">name</span>
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag">prize</span>
+                            <span class="field-tag">flag</span>
+                            <span class="field-tag transform">format_currency</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">At Risk of Elimination (v2.0)</div>
+                        <div class="comp-meta">
+                            <span class="source-badge gfx">gfx_hand_players</span>
+                            <span class="source-badge wsop">wsop_events</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">player_name</span>
+                            <span class="field-tag">rank</span>
+                            <span class="field-tag">prize</span>
+                            <span class="field-tag">flag</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- transition (2) -->
+            <div class="category transition">
+                <div class="category-header">
+                    <span>transition</span>
+                    <span class="category-count">2</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">1-NEXT STREAM STARTING SOON</div>
+                        <div class="comp-meta">
+                            <span class="source-badge static">정적</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">wsop_vlogger_program</span>
+                            <span class="field-tag">https://...</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">(기타 전환)</div>
+                        <div class="comp-meta">
+                            <span class="source-badge static">정적</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- other (2) -->
+            <div class="category other">
+                <div class="category-header">
+                    <span>other</span>
+                    <span class="category-count">2</span>
+                </div>
+                <div class="composition-list">
+                    <div class="composition">
+                        <div class="comp-name">1-Hand-for-hand play is currently in progress</div>
+                        <div class="comp-meta">
+                            <span class="source-badge static">정적</span>
+                        </div>
+                        <div class="fields-row">
+                            <span class="field-tag">event_#12:...</span>
+                        </div>
+                    </div>
+                    <div class="composition">
+                        <div class="comp-name">(기타)</div>
+                        <div class="comp-meta">
+                            <span class="source-badge static">정적</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Summary -->
+        <div class="summary">
+            <h3>Summary Statistics</h3>
+            <div class="summary-grid">
+                <div class="summary-item">
+                    <div class="summary-value">26</div>
+                    <div class="summary-label">Total Compositions</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">9</div>
+                    <div class="summary-label">Categories</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">22</div>
+                    <div class="summary-label">Dynamic Mapping</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">4</div>
+                    <div class="summary-label">Static Content</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">~60</div>
+                    <div class="summary-label">Total Fields</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-value">11</div>
+                    <div class="summary-label">Transform Functions</div>
+                </div>
+            </div>
+
+            <div class="transform-section">
+                <h4>Transform Functions</h4>
+                <div class="transform-list">
+                    <div class="transform-item">
+                        <code>UPPER()</code>
+                        <span>→ "PHIL IVEY"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_chips()</code>
+                        <span>→ "1,500,000"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_bbs()</code>
+                        <span>→ "75.0"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_currency()</code>
+                        <span>→ "$1,000,000"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_date()</code>
+                        <span>→ "Jan 14"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_time()</code>
+                        <span>→ "05:30 PM"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_blinds()</code>
+                        <span>→ "10K/20K (20K)"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>format_percent()</code>
+                        <span>→ "35.4%"</span>
+                    </div>
+                    <div class="transform-item">
+                        <code>get_flag_path()</code>
+                        <span>→ "Flag/Korea.png"</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            08-GFX-AEP-Mapping.md v2.1.0 | Generated: 2026-01-19 | WSOP Poker Broadcast Automation
+        </div>
+    </div>
+</body>
+</html>

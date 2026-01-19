@@ -12,13 +12,13 @@ PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 
 
 ### 0.1 Single Source of Truth (SSOT)
 
-> **이 문서가 GFX JSON 데이터베이스 스키마의 SSOT입니다.**
+> **마이그레이션 SQL이 SSOT입니다. 이 문서는 설계/참조 문서입니다.**
 
 | 계층 | 파일 | 역할 | 업데이트 주체 |
 |:----:|------|------|:-------------:|
-| **SSOT** | `docs/02-GFX-JSON-DB.md` (이 문서) | 설계 명세 | 인간 (설계자) |
-| 구현 | `gfx_json/migrations/*.sql` | 실행 가능한 DDL | 이 문서 기준 동기화 |
-| 구현 | `gfx_json/src/sync_agent/models/*.py` | Python 모델 | 이 문서 기준 동기화 |
+| **SSOT** | `supabase/migrations/*.sql` | 실행 가능한 DDL | 마이그레이션 기준 |
+| 설계/참조 | `docs/02-GFX-JSON-DB.md` (이 문서) | 설계 명세 | 인간 (설계자) |
+| 구현 | `src/*.py` | Python 모델 | 마이그레이션 기준 동기화 |
 | 실행 | Supabase DB (public 스키마) | 실제 데이터 저장소 | Migration SQL 적용 |
 
 ### 0.2 변경 관리 프로세스
@@ -34,7 +34,7 @@ PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 
          ▼
 ┌─────────────────┐
 │ 2. Migration SQL│  ← PRD 변경사항 반영
-│ 업데이트        │     gfx_json/migrations/*.sql
+│ 업데이트        │     supabase/migrations/*.sql
 └────────┬────────┘
          │
          ▼
@@ -60,7 +60,7 @@ PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 
 스키마 변경 시 아래 항목을 확인합니다:
 
 - [ ] PRD (이 문서) 업데이트 완료
-- [ ] Migration SQL 동기화 (`gfx_json/migrations/001_create_normalized_tables.sql`)
+- [ ] Migration SQL 동기화 (`supabase/migrations/20260113082406_01_gfx_schema.sql`)
 - [ ] Python 모델 동기화 (해당하는 경우)
 - [ ] Transformer 동기화 (해당하는 경우)
 - [ ] `schema-analysis-report.md` 업데이트
@@ -71,11 +71,10 @@ PokerGFX JSON 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 
 
 | 파일 | 위치 | 설명 |
 |------|------|------|
-| Migration SQL | `C:\claude\gfx_json\migrations\001_create_normalized_tables.sql` | DDL 실행 파일 |
-| Player 모델 | `C:\claude\gfx_json\src\sync_agent\models\player.py` | HandPlayerRecord 등 |
-| Player Transformer | `C:\claude\gfx_json\src\sync_agent\transformers\player_transformer.py` | JSON → 모델 변환 |
-| 분석 보고서 | `C:\claude\gfx_json\docs\schema-analysis-report.md` | 정합성 분석 |
-| Migration 가이드 | `C:\claude\gfx_json\docs\SCHEMA_MIGRATION_GUIDE.md` | 실행 절차 |
+| Migration SQL | `C:\claude\automation_schema\supabase\migrations\20260113082406_01_gfx_schema.sql` | DDL 실행 파일 (SSOT) |
+| GFX Normalizer | `C:\claude\automation_schema\src\gfx_normalizer.py` | JSON → 정규화 구조 변환 |
+| 스키마 검증 | `C:\claude\automation_schema\scripts\validate_gfx_schema.py` | 스키마 검증 도구 |
+| 분석 보고서 | `C:\claude\automation_schema\schema_analysis_report.md` | 정합성 분석 |
 
 ---
 
@@ -139,6 +138,85 @@ Root (Session)
         └── 통계 (VPIP%, PFR%, Aggression%, ShowdownPct)
 ```
 
+### 1.3.1 필드별 실제 예시 데이터 (gfx_json_data 기준)
+
+> **데이터 소스**: `gfx_json_data/table-GG/`, `gfx_json_data/table-pokercaster/` 폴더의 실제 JSON 파일에서 추출
+
+#### Session Level 예시
+
+| 필드 | 예시 데이터 | 설명 |
+|------|-------------|------|
+| **ID** | `638961224831992165`, `638961999170907267`, `638962014211467634`, `638962926097967686`, `638963849867159576` | Windows FileTime 기반 int64, 고유 세션 식별자 |
+| **CreatedDateTimeUTC** | `2025-10-15T10:54:43.1992165Z`, `2025-10-16T08:25:17.0907267Z`, `2025-10-17T10:10:09.7967686Z` | ISO 8601 UTC 타임스탬프 |
+| **EventTitle** | `""` (빈 문자열) | 토너먼트/이벤트 명칭 (선택적) |
+| **SoftwareVersion** | `"PokerGFX 3.2"` | GFX 소프트웨어 버전 |
+| **Type** | `"FEATURE_TABLE"` | 테이블 타입 ENUM |
+| **Payouts** | `[0, 0, 0, 0, 0, 0, 0, 0, 0, 0]` | 10개 고정 슬롯 페이아웃 배열 |
+
+#### Hand Level 예시
+
+| 필드 | 예시 데이터 | 설명 |
+|------|-------------|------|
+| **HandNum** | `1`, `2`, `3` | 세션 내 핸드 순번 |
+| **Duration** | `"PT35M37.2477537S"`, `"PT19.5488032S"`, `"PT13M25.5865565S"`, `"PT1M23.1911258S"`, `"PT2M56.3404049S"` | ISO 8601 Duration 형식 |
+| **GameVariant** | `"HOLDEM"` | 게임 종류 |
+| **GameClass** | `"FLOP"` | 게임 클래스 |
+| **BetStructure** | `"NOLIMIT"` | 베팅 구조 |
+| **AnteAmt** | `0`, `200`, `2000`, `3000`, `15000` | 앤티 금액 (칩) |
+| **BombPotAmt** | `0` | 폭탄팟 금액 |
+| **StartDateTimeUTC** | `"2025-10-15T12:03:20.9005907Z"`, `"2025-10-16T08:27:15.0463609Z"` | 핸드 시작 시간 |
+| **RecordingOffsetStart** | `"P739538DT16H3M20.9005907S"`, `"P739539DT12H27M15.0463609S"` | 녹화 오프셋 (ISO 8601 Duration) |
+| **NumBoards** | `1` | 보드 수 |
+| **RunItNumTimes** | `1` | Run it twice 횟수 |
+| **Description** | `""` | 핸드 설명 (선택적) |
+
+#### FlopDrawBlinds (블라인드 정보) 예시
+
+| 필드 | 예시 데이터 | 설명 |
+|------|-------------|------|
+| **AnteType** | `"BB_ANTE_BB1ST"` | 앤티 타입 ENUM |
+| **BigBlindAmt** | `800`, `180000`, `200`, `2000`, `3000` | 빅블라인드 금액 |
+| **SmallBlindAmt** | `80`, `5000`, `100`, `1000`, `1500` | 스몰블라인드 금액 |
+| **ButtonPlayerNum** | `1`, `7`, `2`, `4`, `5` | 버튼 위치 플레이어 번호 |
+| **BlindLevel** | `0` | 블라인드 레벨 |
+
+#### Player Level 예시
+
+| 필드 | 예시 데이터 | 설명 |
+|------|-------------|------|
+| **PlayerNum** | `1`, `2`, `3`, `4` | 시트 번호 (1-10) |
+| **Name** | `"jhkg"`, `"SAD"`, `"asd"`, `"SEAT 1"`, `"SEAT 2"` | 플레이어 표시명 |
+| **LongName** | `"jhkg"`, `"SAD"`, `"asd"`, `""`, `"Cristian Ivanus"` | 플레이어 전체 이름 |
+| **HoleCards** | `[""]`, `["10d 9d"]`, `["qd 8h"]`, `["kd 10d"]`, `["9c 5d"]` | 홀 카드 (공백 구분 단일 문자열) |
+| **StartStackAmt** | `1224444`, `2455123`, `3151166`, `4000000`, `8000000` | 시작 스택 (칩) |
+| **EndStackAmt** | `1224444`, `2455123`, `3151166`, `4000000`, `7995000` | 종료 스택 (칩) |
+| **CumulativeWinningsAmt** | `0`, `-5000`, `5000`, `-175000`, `15300` | 누적 승/패 금액 |
+| **VPIPPercent** | `0`, `100`, `50`, `66`, `33` | VPIP 통계 (%) |
+| **PreFlopRaisePercent** | `0`, `100`, `50`, `66`, `33` | PFR 통계 (%) |
+| **AggressionFrequencyPercent** | `0`, `72`, `20`, `60`, `50` | 어그레션 통계 (%) |
+| **WentToShowDownPercent** | `0`, `100` | 쇼다운 진출률 (%) |
+| **SittingOut** | `false` | Sitting Out 여부 |
+| **EliminationRank** | `-1` | 탈락 순위 (-1 = 미탈락) |
+| **BlindBetStraddleAmt** | `0` | 블라인드/스트래들 금액 |
+
+#### Event Level 예시
+
+| 필드 | 예시 데이터 | 설명 |
+|------|-------------|------|
+| **EventType** | `"FOLD"`, `"CALL"`, `"BET"`, `"CHECK"`, `"ALL IN"`, `"BOARD CARD"` | 액션 타입 (**주의**: 공백 포함) |
+| **PlayerNum** | `0`, `1`, `2`, `3`, `4`, `5` | 플레이어 번호 (0 = 보드/딜러) |
+| **BetAmt** | `0`, `180000`, `500`, `700`, `2200` | 베팅 금액 |
+| **Pot** | `0`, `185000`, `365000`, `545000`, `725000` | 팟 크기 |
+| **BoardCards** | `null`, `"6d"`, `"6s"`, `"6h"`, `"6c"`, `"jh"` | 보드 카드 (단일 카드) |
+| **BoardNum** | `0` | 보드 번호 (Run it twice 시 사용) |
+| **NumCardsDrawn** | `0` | Draw 게임용 드로우 카드 수 |
+| **DateTimeUTC** | `null` | 이벤트 시간 (대부분 null) |
+
+> **중요 파싱 주의사항**:
+> - `EventType`에 공백이 포함됨: `"ALL IN"` → DB ENUM `ALL_IN`, `"BOARD CARD"` → `BOARD_CARD`
+> - `HoleCards`는 단일 문자열 배열: `["10d 9d"]` → 파싱 후 `["10d", "9d"]`로 분리
+> - `BoardCards`는 BOARD_CARD 이벤트에서만 값이 존재, 그 외는 `null`
+
 ### 1.4 JSON Field → DB Column 매핑표
 
 > **주의**: JSON 필드명과 DB 컬럼명이 다릅니다. 파싱 시 반드시 아래 매핑을 참조하세요.
@@ -182,12 +260,12 @@ session_id = data["session_id"]  # JSON에 이 필드 없음!
 | `RecordingOffsetStart` | `recording_offset_seconds` | ISO 8601 Duration → BIGINT | 파싱 |
 | `NumBoards` | `num_boards` | int → INTEGER | |
 | `RunItNumTimes` | `run_it_num_times` | int → INTEGER | |
-| `AnteAmt` | `ante_amt` | int → INTEGER | |
-| `BombPotAmt` | `bomb_pot_amt` | int → INTEGER | |
+| `AnteAmt` | `ante_amt` | int → BIGINT | 칩 금액 |
+| `BombPotAmt` | `bomb_pot_amt` | int → BIGINT | 칩 금액 |
 | `Description` | `description` | string → TEXT | |
 | `FlopDrawBlinds` | `blinds` | object → JSONB | 전체 객체 저장 |
 | `StudLimits` | `stud_limits` | object → JSONB | 전체 객체 저장 |
-| *Events[-1].Pot* | `pot_size` | 계산 → INTEGER | 마지막 이벤트 Pot |
+| *Events[-1].Pot* | `pot_size` | 계산 → BIGINT | 마지막 이벤트 Pot |
 | *len(Players)* | `player_count` | 계산 → INTEGER | |
 
 **Duration 파싱 예시**:
@@ -210,8 +288,8 @@ def parse_duration(duration: str) -> int:
 | *배열 인덱스* | `event_order` | int → INTEGER | |
 | `EventType` | `event_type` | string → ENUM | **`"BOARD CARD"` → `BOARD_CARD`** |
 | `PlayerNum` | `player_num` | int → INTEGER | 0 = board |
-| `BetAmt` | `bet_amt` | int → INTEGER | |
-| `Pot` | `pot` | int → INTEGER | |
+| `BetAmt` | `bet_amt` | int → BIGINT | 칩 금액 |
+| `Pot` | `pot` | int → BIGINT | 칩 금액 |
 | `BoardCards` | `board_cards` | string → TEXT | 단일 카드 |
 | `BoardNum` | `board_num` | int → INTEGER | |
 | `NumCardsDrawn` | `num_cards_drawn` | int → INTEGER | |
@@ -239,10 +317,10 @@ EVENT_TYPE_MAP = {
 | `LongName` | *gfx_players 참조* | string → TEXT | |
 | `HoleCards` | `hole_cards` | string[] → TEXT[] | **공백 분리 필요** |
 | *hole_cards 유무* | `has_shown` | bool → BOOLEAN | 계산 |
-| `StartStackAmt` | `start_stack_amt` | int → INTEGER | |
-| `EndStackAmt` | `end_stack_amt` | int → INTEGER | |
-| `CumulativeWinningsAmt` | `cumulative_winnings_amt` | int → INTEGER | |
-| `BlindBetStraddleAmt` | `blind_bet_straddle_amt` | int → INTEGER | |
+| `StartStackAmt` | `start_stack_amt` | int → BIGINT | 칩 금액 |
+| `EndStackAmt` | `end_stack_amt` | int → BIGINT | 칩 금액 |
+| `CumulativeWinningsAmt` | `cumulative_winnings_amt` | int → BIGINT | 칩 금액 |
+| `BlindBetStraddleAmt` | `blind_bet_straddle_amt` | int → BIGINT | 칩 금액 |
 | `SittingOut` | `sitting_out` | bool → BOOLEAN | |
 | `EliminationRank` | `elimination_rank` | int → INTEGER | -1 = 미탈락 |
 | *stack 증가 여부* | `is_winner` | bool → BOOLEAN | 계산 |
@@ -576,8 +654,8 @@ CREATE TABLE gfx_hands (
     -- 게임 설정
     num_boards INTEGER DEFAULT 1,
     run_it_num_times INTEGER DEFAULT 1,
-    ante_amt INTEGER DEFAULT 0,
-    bomb_pot_amt INTEGER DEFAULT 0,
+    ante_amt BIGINT DEFAULT 0,       -- 칩 금액: BIGINT (오버플로우 방지)
+    bomb_pot_amt BIGINT DEFAULT 0,   -- 칩 금액: BIGINT (오버플로우 방지)
     description TEXT DEFAULT '',
 
     -- 블라인드 정보 (JSONB로 유연하게 저장)
@@ -599,7 +677,7 @@ CREATE TABLE gfx_hands (
     stud_limits JSONB DEFAULT '{}'::JSONB,
 
     -- 집계 필드
-    pot_size INTEGER DEFAULT 0,
+    pot_size BIGINT DEFAULT 0,       -- 칩 금액: BIGINT (오버플로우 방지)
     player_count INTEGER DEFAULT 0,
     showdown_count INTEGER DEFAULT 0,
 
@@ -653,11 +731,11 @@ CREATE TABLE gfx_hand_players (
     hole_cards TEXT[] DEFAULT ARRAY[]::TEXT[],
     has_shown BOOLEAN DEFAULT FALSE,
 
-    -- 스택 정보
-    start_stack_amt INTEGER DEFAULT 0,
-    end_stack_amt INTEGER DEFAULT 0,
-    cumulative_winnings_amt INTEGER DEFAULT 0,
-    blind_bet_straddle_amt INTEGER DEFAULT 0,
+    -- 스택 정보 (칩 금액: 모두 BIGINT - 오버플로우 방지)
+    start_stack_amt BIGINT DEFAULT 0,
+    end_stack_amt BIGINT DEFAULT 0,
+    cumulative_winnings_amt BIGINT DEFAULT 0,
+    blind_bet_straddle_amt BIGINT DEFAULT 0,
 
     -- 상태
     sitting_out BOOLEAN DEFAULT FALSE,
@@ -709,9 +787,9 @@ CREATE TABLE gfx_events (
     event_type event_type NOT NULL,
     player_num INTEGER DEFAULT 0,  -- 0 = 보드 카드
 
-    -- 베팅 정보
-    bet_amt INTEGER DEFAULT 0,
-    pot INTEGER DEFAULT 0,
+    -- 베팅 정보 (칩 금액: BIGINT - 오버플로우 방지)
+    bet_amt BIGINT DEFAULT 0,
+    pot BIGINT DEFAULT 0,
 
     -- 보드 카드 (BOARD_CARD 이벤트 시)
     board_cards TEXT,  -- 단일 카드 문자열 (예: "6d")
@@ -1321,22 +1399,65 @@ Supabase DB에 두 개의 독립적인 GFX 관련 스키마가 존재:
 | `json.hand_cards` | (신규) `public.gfx_hand_cards` | public에 없음 |
 | `json.hand_results` | (신규) `public.gfx_hand_results` | public에 없음 |
 
-### 12.3 권장 전략: 옵션 D (코드 수정 + 스키마 확장)
+### 12.3 스키마 역할 분리 (수정된 전략)
 
-**선택 이유**:
-1. 단일 진실 소스 (SSOT) 확보
-2. 트리거/뷰 오버헤드 없는 최적 성능
-3. 기존 AEP 렌더링 함수 재사용 가능
+> **중요**: `json` 스키마는 GFX JSON 파일의 고정 포맷을 그대로 반영하므로 **변경 불가**.
+> JSON 파일 구조와 불일치 위험을 방지하기 위해 json 스키마는 원본 그대로 보존합니다.
 
-### 12.4 구현 계획
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        데이터 흐름 (수정된 전략)                      │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│   GFX JSON File                                                     │
+│        │                                                            │
+│        ▼                                                            │
+│   ┌─────────────────┐                                               │
+│   │  json 스키마     │  ← 원본 보존 (수정 금지)                       │
+│   │  (Source)       │    GFX 파일 구조 1:1 매핑                      │
+│   │  - gfx_sessions │                                               │
+│   │  - hands        │                                               │
+│   │  - hand_players │                                               │
+│   │  - hand_actions │                                               │
+│   │  - hand_cards   │                                               │
+│   │  - hand_results │                                               │
+│   └────────┬────────┘                                               │
+│            │                                                        │
+│            │  트리거 동기화 (INSERT/UPDATE 시 자동)                   │
+│            ▼                                                        │
+│   ┌─────────────────┐                                               │
+│   │  public 스키마   │  ← AEP 렌더링용 확장 스키마                    │
+│   │  (Target)       │    추가 컬럼, 계산 필드 포함                    │
+│   │  - gfx_sessions │                                               │
+│   │  - gfx_hands    │                                               │
+│   │  - gfx_hand_*   │                                               │
+│   │  - gfx_events   │                                               │
+│   └────────┬────────┘                                               │
+│            │                                                        │
+│            ▼                                                        │
+│   ┌─────────────────┐                                               │
+│   │  AEP 렌더링 뷰   │                                               │
+│   │  v_render_*     │                                               │
+│   └─────────────────┘                                               │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
 
-| Phase | 작업 | 예상 기간 |
-|-------|------|:--------:|
-| 1 | public 스키마 확장 (ALTER TABLE) | 1일 |
-| 2 | 신규 테이블 추가 (gfx_hand_cards, gfx_hand_results) | 1일 |
-| 3 | gfx_json 코드 수정 (필드 매핑 레이어) | 2-3일 |
-| 4 | 데이터 마이그레이션 (json → public) | 1일 |
-| 5 | json 스키마 폐기 | 1일 |
+| 스키마 | 역할 | 수정 가능 | 데이터 소스 |
+|--------|------|:---------:|-------------|
+| `json` | GFX 파일 원본 저장 | ❌ 금지 | gfx_json 파서 |
+| `public` | AEP 렌더링용 확장 | ✅ 가능 | json 스키마 동기화 |
+
+### 12.4 구현 계획 (수정됨)
+
+| Phase | 작업 | 상태 |
+|-------|------|:----:|
+| 1 | public 스키마 확장 (ALTER TABLE) | ✅ 완료 |
+| 2 | 신규 테이블 추가 (gfx_hand_cards, gfx_hand_results) | ✅ 완료 |
+| 3 | 동기화 트리거 생성 (json → public) | 📋 예정 |
+| 4 | 기존 데이터 마이그레이션 | 📋 예정 |
+
+> **Phase 5 (json 스키마 폐기) 제거됨**: json 스키마는 GFX 파일 원본으로 영구 보존
 
 ### 12.5 스키마 확장 SQL
 
@@ -1394,9 +1515,53 @@ FIELD_MAPPING = {
 }
 ```
 
-### 12.7 마이그레이션 후 json 스키마 폐기
+### 12.7 동기화 트리거 (Phase 3 예정)
+
+json 스키마에 데이터가 INSERT/UPDATE될 때 public 스키마로 자동 동기화:
 
 ```sql
--- 검증 완료 후 실행
-DROP SCHEMA IF EXISTS json CASCADE;
+-- 예시: json.hands → public.gfx_hands 동기화 트리거
+CREATE OR REPLACE FUNCTION sync_json_hands_to_public()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.gfx_hands (
+        hand_num,
+        session_id,
+        grade,
+        is_premium,
+        is_showdown,
+        -- 추가 필드...
+    )
+    VALUES (
+        NEW.hand_number,
+        NEW.session_id,
+        NEW.grade,
+        NEW.is_premium,
+        NEW.is_showdown,
+        -- 추가 필드...
+    )
+    ON CONFLICT (hand_num, session_id) DO UPDATE SET
+        grade = EXCLUDED.grade,
+        is_premium = EXCLUDED.is_premium,
+        updated_at = NOW();
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_sync_hands_to_public
+    AFTER INSERT OR UPDATE ON json.hands
+    FOR EACH ROW
+    EXECUTE FUNCTION sync_json_hands_to_public();
 ```
+
+> **참고**: 상세 트리거 구현은 별도 마이그레이션 파일로 작성 예정
+
+### 12.8 스키마 보존 정책
+
+| 정책 | 내용 |
+|------|------|
+| **json 스키마** | 영구 보존 - GFX 파일 원본 구조 유지 |
+| **public 스키마** | 확장 가능 - AEP 렌더링 요구사항에 맞게 수정 |
+| **동기화 방향** | json → public (단방향) |
+| **충돌 처리** | public 스키마 데이터 덮어쓰기 (json이 SSOT) |

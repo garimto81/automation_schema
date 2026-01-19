@@ -1012,12 +1012,12 @@ Sync API:
 
 | 문서 | 경로 | 설명 |
 |------|------|------|
-| GFX JSON DB | `docs/GFX JSON DB.md` | PokerGFX JSON 스키마 |
-| WSOP+ DB | `docs/WSOP+ DB.md` | WSOP+ 데이터 스키마 |
-| Manual DB | `docs/Manual DB.md` | 수동 플레이어 스키마 |
-| Cuesheet DB | `docs/Cuesheet DB.md` | 큐시트 스키마 |
-| Supabase Orchestration | `docs/Supabase Orchestration.md` | 통합 오케스트레이션 |
-| AEP Analysis DB | `docs/AEP Analysis DB.md` | After Effects 분석 |
+| GFX JSON DB | `docs/02-GFX-JSON-DB.md` | PokerGFX JSON 스키마 |
+| WSOP+ DB | `docs/03-WSOP+-DB.md` | WSOP+ 데이터 스키마 |
+| Manual DB | `docs/04-Manual-DB.md` | 수동 플레이어 스키마 |
+| Cuesheet DB | `docs/05-Cuesheet-DB.md` | 큐시트 스키마 |
+| Supabase Orchestration | `docs/07-Supabase-Orchestration.md` | 통합 오케스트레이션 |
+| AEP Analysis DB | `docs/06-AEP-Analysis-DB.md` | After Effects 분석 |
 
 ### 11.2 구현 참조
 
@@ -1028,3 +1028,30 @@ Sync API:
 | Sync Worker | `src/workers/sync_worker.py` | 동기화 워커 |
 | Render Worker | `src/workers/render_worker.py` | 렌더링 워커 |
 | Unified API | `src/api/unified_api.py` | 통합 API |
+
+---
+
+## 12. 문서 그룹 및 인덱스
+
+> **그룹 B**: 데이터 흐름 및 오케스트레이션 (Master: 01-DATA_FLOW)
+
+### 12.1 문서 계층
+
+```
+01-DATA_FLOW.md (본 문서 - Master)
+└── 07-Supabase-Orchestration.md (오케스트레이션 DDL 상세)
+```
+
+### 12.2 관련 문서
+
+| 문서 | 역할 | 관계 |
+|------|------|------|
+| **00-DOCUMENT-INDEX.md** | 전체 문서 인덱스 | 그룹/SSOT 정의 |
+| **07-Supabase-Orchestration.md** | 오케스트레이션 스키마 DDL | 본 문서 종속 |
+| 02-GFX-JSON-DB.md | GFX JSON 스키마 | 데이터 소스 |
+| 03-WSOP+-DB.md | WSOP+ 스키마 | 데이터 소스 |
+| 04-Manual-DB.md | Manual Override 스키마 | 데이터 소스 |
+| 05-Cuesheet-DB.md | 큐시트 스키마 | Dashboard 계층 |
+| 06-AEP-Analysis-DB.md | AEP 분석 스키마 | Output 계층 |
+
+> **SSOT 정책**: 마이그레이션 SQL (`supabase/migrations/*.sql`)이 진실의 소스. 본 문서와 마이그레이션이 다르면 마이그레이션이 정답.

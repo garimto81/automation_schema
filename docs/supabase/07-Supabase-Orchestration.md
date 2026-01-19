@@ -1659,3 +1659,112 @@ CREATE POLICY "activity_log_insert_service"
 | `src/workers/job_worker.py` | 작업 워커 | job_queue |
 | `src/workers/render_worker.py` | 렌더 워커 | render_queue |
 | `src/api/unified_api.py` | 통합 API | 통합 뷰 |
+
+---
+
+## 13. 문서 그룹 및 인덱스
+
+> **그룹 B**: 데이터 흐름 및 오케스트레이션 (Master: 01-DATA_FLOW)
+
+### 13.1 문서 계층
+
+```
+01-DATA_FLOW.md (Master - 전체 흐름 개요)
+└── 07-Supabase-Orchestration.md (본 문서 - DDL 상세)
+```
+
+### 13.2 관련 문서
+
+| 문서 | 역할 | 관계 |
+|------|------|------|
+| **00-DOCUMENT-INDEX.md** | 전체 문서 인덱스 | 그룹/SSOT 정의 |
+| **01-DATA_FLOW.md** | 전체 데이터 흐름 아키텍처 | Master 문서 |
+| 08-GFX-AEP-Mapping.md | GFX-AEP 매핑 대전략 | 렌더 큐 연동 |
+| 09-DB-Sync-Guidelines.md | DB 동기화 가이드 | sync_status 연동 |
+
+### 13.3 중복 관리
+
+| 중복 영역 | 01-DATA_FLOW | 본 문서 (07) |
+|----------|--------------|--------------|
+| 동기화 상태 | 개념/다이어그램 | DDL/함수 구현 |
+| 렌더링 파이프라인 | 전체 흐름 | render_queue 테이블 DDL |
+| 통합 뷰 | 역할 설명 | CREATE VIEW DDL |
+
+> **SSOT 정책**: 마이그레이션 SQL (`supabase/migrations/*.sql`)이 진실의 소스.
+
+---
+
+## 14. Cross-Schema FK 정책
+
+### 14.1 개요
+
+Orchestration 스키마는 다른 스키마(GFX, WSOP+, Manual, Cuesheet)의 테이블을 참조합니다.
+PostgreSQL에서는 외부 스키마 참조가 가능하지만, 참조 무결성 및 마이그레이션 순서에 주의가 필요합니다.
+
+### 14.2 Cross-Schema FK 참조 목록
+
+| 테이블 | 컬럼 | 참조 대상 | 정책 |
+|--------|------|-----------|------|
+| `render_queue` | `cue_item_id` | `cue_items.id` (Cuesheet) | ON DELETE SET NULL |
+| `render_queue` | `job_id` | `job_queue.id` (동일 스키마) | ON DELETE SET NULL |
+| `sync_status` | `entity_id` | 각 소스 테이블의 ID | 논리적 참조만 (FK 없음) |
+
+### 14.3 통합 뷰의 외부 참조
+
+통합 뷰는 여러 스키마의 테이블을 UNION합니다:
+
+```sql
+-- unified_players 참조 대상
+gfx_players      -- GFX 스키마
+wsop_players     -- WSOP+ 스키마
+
+-- unified_events 참조 대상
+wsop_events          -- WSOP+ 스키마
+gfx_sessions         -- GFX 스키마
+broadcast_sessions   -- Cuesheet 스키마
+
+-- unified_chip_data 참조 대상
+wsop_chip_counts     -- WSOP+ 스키마
+gfx_hand_players     -- GFX 스키마
+gfx_hands            -- GFX 스키마
+wsop_players         -- WSOP+ 스키마
+```
+
+### 14.4 FK 정책 가이드
+
+| 정책 | 설명 | 적용 대상 |
+|------|------|----------|
+| **HARD FK** | 실제 FK 제약조건 | 동일 스키마 내 테이블 |
+| **SOFT FK** | 논리적 참조 (애플리케이션 레벨 검증) | Cross-Schema 참조 |
+| **ON DELETE SET NULL** | 참조 대상 삭제 시 NULL로 설정 | 선택적 참조 |
+| **ON DELETE CASCADE** | 참조 대상 삭제 시 함께 삭제 | 필수 참조 (주의 필요) |
+
+### 14.5 마이그레이션 순서 주의사항
+
+```
+1. 참조 대상 테이블 먼저 생성
+   - gfx_players, wsop_players, cue_items 등
+
+2. 참조하는 테이블 생성
+   - render_queue (cue_item_id 참조)
+
+3. Cross-Schema FK는 DEFERRABLE 고려
+   - 순환 참조 방지
+   - 트랜잭션 내 순서 유연성 확보
+```
+
+### 14.6 애플리케이션 레벨 검증
+
+Cross-Schema FK가 없는 경우, 애플리케이션에서 참조 무결성 검증:
+
+```python
+# 예시: render_queue에 cue_item_id 삽입 전 검증
+async def validate_cue_item_exists(cue_item_id: UUID) -> bool:
+    result = await supabase.table("cue_items").select("id").eq("id", cue_item_id).execute()
+    return len(result.data) > 0
+
+async def create_render_job(cue_item_id: UUID, ...):
+    if cue_item_id and not await validate_cue_item_exists(cue_item_id):
+        raise ValueError(f"Invalid cue_item_id: {cue_item_id}")
+    # ... render job 생성
+```

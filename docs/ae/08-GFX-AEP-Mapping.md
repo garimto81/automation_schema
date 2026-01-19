@@ -304,18 +304,24 @@ LIMIT 6;
 
 | # | 컴포지션 | 필드 키 (슬롯) | GFX 소스 | 슬롯 수 | 변환 |
 |---|----------|----------------|----------|---------|------|
-| 1 | Commentator | name, sub, commentary, text_제목 | manual.commentators | **2** | 직접 |
-| 2 | Reporter | name, sub | manual.reporters | **2** | 직접 |
+| 1 | Commentator | name, sub, commentary, text_제목 | **TODO: broadcast_staff** | **2** | 직접 |
+| 2 | Reporter | name, sub | **TODO: broadcast_staff** | **2** | 직접 |
 
-**매핑 로직:**
+> ⚠️ **TODO**: `manual_commentators`, `manual_reporters` 테이블은 현재 미구현 상태입니다.
+> 향후 `broadcast_staff` 테이블로 통합하여 staff_type(commentator, reporter)으로 구분하는 것을 권장합니다.
+
+**매핑 로직 (예정):**
 
 ```sql
+-- TODO: broadcast_staff 테이블 구현 후 사용
 SELECT
     ROW_NUMBER() OVER () AS slot_index,
-    c.name,
-    c.social_handle AS sub
-FROM manual_commentators c
-WHERE c.event_id = :event_id
+    bs.name,
+    bs.social_handle AS sub
+FROM broadcast_staff bs
+WHERE bs.session_id = :session_id
+  AND bs.staff_type = 'commentator'
+ORDER BY bs.display_order
 LIMIT 2;
 ```
 
@@ -1287,21 +1293,23 @@ chips_30h = [1500000, 1480000, 1450000, ...]  (30개)
 
 ### 12.5 staff 카테고리
 
+> ⚠️ **TODO**: staff 테이블 (`broadcast_staff`) 구현 필요. 현재 하드코딩 또는 cue_sheets 메타데이터에서 참조.
+
 #### 12.5.1 Commentator (2 슬롯)
 
-| AEP 필드 | DB 컬럼 | 예시 |
-|----------|---------|------|
-| `Name {N}` | `manual_commentators.name` | `"Jeff Platt"` |
-| `Sub {N}` | `manual_commentators.social_handle` | `"@jeffplatt"` |
+| AEP 필드 | DB 컬럼 (예정) | 예시 |
+|----------|----------------|------|
+| `Name {N}` | `broadcast_staff.name` (staff_type='commentator') | `"Jeff Platt"` |
+| `Sub {N}` | `broadcast_staff.social_handle` | `"@jeffplatt"` |
 | `commentary` | 고정 | `"COMMENTARY"` |
 | `text_제목` | 고정 | `"COMMENTATORS"` |
 
 #### 12.5.2 Reporter (2 슬롯)
 
-| AEP 필드 | DB 컬럼 | 예시 |
-|----------|---------|------|
-| `Name {N}` | `manual_reporters.name` | `"Kara Scott"` |
-| `Sub {N}` | `manual_reporters.social_handle` | `"@karascott"` |
+| AEP 필드 | DB 컬럼 (예정) | 예시 |
+|----------|----------------|------|
+| `Name {N}` | `broadcast_staff.name` (staff_type='reporter') | `"Kara Scott"` |
+| `Sub {N}` | `broadcast_staff.social_handle` | `"@karascott"` |
 | `text_제목` | 고정 | `"REPORTER"` |
 
 ---
@@ -1736,3 +1744,189 @@ $$ LANGUAGE plpgsql IMMUTABLE;
 │                                                                           │
 └───────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 15. json 스키마 → public 스키마 통합 (데이터 흐름 관점)
+
+### 15.1 현재 상황
+
+Supabase DB에 두 개의 독립적인 GFX 관련 스키마가 존재하며, 데이터 흐름이 분리됨:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        현재 분리된 데이터 흐름                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                     ┌──────────────────┐
+                     │   GFX JSON 파일   │
+                     └────────┬─────────┘
+                              │
+              ┌───────────────┴───────────────┐
+              │                               │
+              ▼                               ▼
+    ┌─────────────────────┐       ┌─────────────────────┐
+    │    json 스키마       │       │   public 스키마      │
+    │  (gfx_json 프로젝트)  │  ✖    │  (AEP 렌더링)        │
+    ├─────────────────────┤ 연결  ├─────────────────────┤
+    │ gfx_sessions        │ 없음  │ gfx_sessions        │
+    │ hands               │       │ gfx_hands           │
+    │ hand_players        │       │ gfx_hand_players    │
+    │ hand_actions        │       │ gfx_events          │
+    │ hand_cards          │       │   (대응 없음)        │
+    │ hand_results        │       │   (대응 없음)        │
+    └─────────────────────┘       └─────────────────────┘
+                                           │
+                                           ▼
+                              ┌─────────────────────┐
+                              │   AEP 렌더링 뷰     │
+                              │ v_render_chip_display│
+                              │ v_render_elimination │
+                              └─────────────────────┘
+                                           │
+                                           ▼
+                              ┌─────────────────────┐
+                              │   AEP 자막 출력     │
+                              └─────────────────────┘
+
+**문제점**: json 스키마 데이터가 AEP 렌더링에 활용되지 않음
+```
+
+### 15.2 수정된 통합 전략 (json 스키마 보존)
+
+> **중요**: `json` 스키마는 GFX JSON 파일의 고정 포맷을 그대로 반영하므로 **변경/폐기 불가**.
+> JSON 파일 구조와 불일치 위험을 방지하기 위해 트리거 기반 동기화 방식으로 변경됨.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     수정된 데이터 흐름 (json 스키마 보존)                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+                     ┌──────────────────┐
+                     │   GFX JSON 파일   │
+                     └────────┬─────────┘
+                              │
+                              ▼
+              ┌───────────────────────────────┐
+              │        gfx_json 프로젝트        │
+              │      (JSON 파일 → DB 파싱)      │
+              └───────────────┬───────────────┘
+                              │
+                              ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                    json 스키마 (원본 보존)                │
+    │                  ⚠️ 수정 금지 - SSOT                     │
+    ├─────────────────────────────────────────────────────────┤
+    │  gfx_sessions    ← GFX 파일 구조 1:1 매핑                 │
+    │  hands           ← GFX 파일 구조 1:1 매핑                 │
+    │  hand_players    ← GFX 파일 구조 1:1 매핑                 │
+    │  hand_actions    ← GFX 파일 구조 1:1 매핑                 │
+    │  hand_cards      ← GFX 파일 구조 1:1 매핑                 │
+    │  hand_results    ← GFX 파일 구조 1:1 매핑                 │
+    └─────────────────────────┬───────────────────────────────┘
+                              │
+                              │  트리거 동기화
+                              │  (INSERT/UPDATE 시 자동)
+                              ▼
+    ┌─────────────────────────────────────────────────────────┐
+    │                    public 스키마 (AEP 확장)               │
+    │                  ✅ 수정 가능 - 렌더링용                  │
+    ├─────────────────────────────────────────────────────────┤
+    │  gfx_sessions    ← 기존 + 확장 컬럼                       │
+    │  gfx_hands       ← 기존 + grade, is_premium 등 확장       │
+    │  gfx_hand_players← 기존 + hole_cards_normalized 등 확장   │
+    │  gfx_events      ← 기존 + street, action 등 확장          │
+    │  gfx_hand_cards  ← 신규 테이블                            │
+    │  gfx_hand_results← 신규 테이블                            │
+    └─────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+              ┌───────────────────────────────┐
+              │        AEP 렌더링 뷰          │
+              │  v_render_chip_display        │
+              │  v_render_elimination         │
+              │  + 기존 모든 AEP 함수 유지     │
+              └───────────────────────────────┘
+                              │
+                              ▼
+              ┌───────────────────────────────┐
+              │         AEP 자막 출력          │
+              │  26개 컴포지션 자동 매핑        │
+              └───────────────────────────────┘
+
+**개선점**:
+- json 스키마: GFX 파일 원본 유지 (SSOT)
+- public 스키마: AEP 렌더링용 확장 (동기화됨)
+```
+
+### 15.3 AEP 매핑에 미치는 영향
+
+| 영향 범위 | 변경 사항 | 영향도 |
+|-----------|----------|:------:|
+| chip_display (6개) | 변경 없음 - public 스키마 사용 중 | 없음 |
+| player_info (4개) | 변경 없음 - public 스키마 사용 중 | 없음 |
+| payout (2개) | 변경 없음 - public 스키마 사용 중 | 없음 |
+| schedule (2개) | 변경 없음 - wsop_plus 스키마 | 없음 |
+| **신규 가능** | hand_cards, hand_results 데이터 활용 | 신규 |
+
+### 15.4 신규 데이터 활용 가능성
+
+통합 후 `gfx_hand_cards`, `gfx_hand_results` 테이블이 추가되어 다음 컴포지션에서 활용 가능:
+
+| 컴포지션 | 신규 필드 | 데이터 소스 |
+|----------|----------|-------------|
+| Hand Result (v3.0) | winning_hand, rank_value | gfx_hand_results |
+| Card Display (v3.0) | flop_cards, turn_card, river_card | gfx_hand_cards |
+| Hand History (v3.0) | best_five, kickers | gfx_hand_results |
+
+### 15.5 마이그레이션 일정 (수정됨)
+
+| Phase | 작업 | 상태 | AEP 영향 |
+|-------|------|:----:|----------|
+| 1 | public 스키마 확장 | ✅ 완료 | 없음 (기존 컬럼 유지) |
+| 2 | 신규 테이블 추가 | ✅ 완료 | 없음 (신규 테이블만) |
+| 3 | 동기화 트리거 생성 | 📋 예정 | 없음 (DB 레이어만) |
+| 4 | 기존 데이터 마이그레이션 | 📋 예정 | 없음 (데이터 이관만) |
+
+> **Phase 5 (json 스키마 폐기) 제거됨**: json 스키마는 GFX 파일 원본으로 영구 보존
+
+**결론**: AEP 매핑에는 **영향 없음**. 기존 렌더링 뷰와 함수는 그대로 유지됩니다.
+
+---
+
+## 16. 문서 그룹 및 인덱스
+
+> **그룹 A**: GFX-AEP 매핑 대전략 (Master: 08-GFX-AEP-Mapping)
+
+### 16.1 문서 계층
+
+```
+08-GFX-AEP-Mapping.md (본 문서 - Master/SSOT)
+├── 09-DB-Sync-Guidelines.md (DB 동기화 구현)
+│   └── External PostgreSQL ↔ Supabase CDC/Batch 동기화
+│
+└── DOCUMENT_SYNC_STRATEGY.md (문서-코드 동기화)
+    └── docs/*.md ↔ supabase/migrations/*.sql 일치 보장
+```
+
+### 16.2 관련 문서
+
+| 문서 | 역할 | 관계 |
+|------|------|------|
+| **00-DOCUMENT-INDEX.md** | 전체 문서 인덱스 | 그룹/SSOT 정의 |
+| **09-DB-Sync-Guidelines.md** | DB 동기화 가이드 | 본 문서 종속 |
+| **DOCUMENT_SYNC_STRATEGY.md** | 문서-코드 동기화 | 본 문서 종속 |
+| 01-DATA_FLOW.md | 전체 데이터 흐름 | 그룹 B Master |
+| 07-Supabase-Orchestration.md | 오케스트레이션 DDL | render_queue 연동 |
+| 02-GFX-JSON-DB.md | GFX JSON 스키마 | 데이터 소스 |
+| 06-AEP-Analysis-DB.md | AEP 분석 스키마 | 컴포지션 정의 |
+
+### 16.3 수정 가이드라인
+
+| 변경 유형 | 수정할 문서 | 연쇄 확인 |
+|----------|------------|----------|
+| AEP 컴포지션 추가/변경 | 본 문서 (08) | 해당 없음 |
+| DB 동기화 방식 변경 | 09 | 본 문서 확인 |
+| 마이그레이션 추가 | migrations/*.sql | DOCUMENT_SYNC_STRATEGY 검증 |
+
+> **SSOT 정책**: 마이그레이션 SQL (`supabase/migrations/*.sql`)이 진실의 소스. 본 문서와 마이그레이션이 다르면 마이그레이션이 정답.

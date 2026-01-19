@@ -355,9 +355,11 @@ async def listen_override_changes():
 
 ### 6.1 건강 상태 대시보드 뷰
 
+> **참고**: 07-Supabase-Orchestration.md의 `v_sync_dashboard` 뷰와 유사한 기능. 아래는 확장 버전.
+
 ```sql
--- v_sync_health 뷰 (05_orch_schema.sql에 추가)
-CREATE OR REPLACE VIEW v_sync_health AS
+-- v_sync_dashboard 뷰 확장 (건강 상태 포함)
+CREATE OR REPLACE VIEW v_sync_dashboard AS
 SELECT
     source,
     entity_type,
@@ -399,7 +401,7 @@ DECLARE
     v_unhealthy RECORD;
 BEGIN
     FOR v_unhealthy IN
-        SELECT * FROM v_sync_health
+        SELECT * FROM v_sync_dashboard
         WHERE health_status IN ('CRITICAL', 'ERROR')
     LOOP
         -- 알림 생성
@@ -539,7 +541,7 @@ $$ LANGUAGE plpgsql;
 
 ### 8.2 운영 체크리스트 (일일)
 
-- [ ] `v_sync_health` 뷰 확인 (HEALTHY 상태)
+- [ ] `v_sync_dashboard` 뷰 확인 (HEALTHY 상태)
 - [ ] `sync_log` 최근 오류 확인
 - [ ] CDC lag 확인 (< 5초)
 - [ ] Batch Sync 완료 확인
@@ -609,9 +611,42 @@ psql -h db.xxx.supabase.co -c "
 
 ---
 
+## 11. 문서 그룹 및 인덱스
+
+> **그룹 A**: GFX-AEP 매핑 대전략 (Master: 08-GFX-AEP-Mapping)
+
+### 11.1 문서 계층
+
+```
+08-GFX-AEP-Mapping.md (Master - 대전략)
+├── 09-DB-Sync-Guidelines.md (본 문서 - DB 동기화 구현)
+│   └── External PostgreSQL ↔ Supabase CDC/Batch 동기화
+│
+└── DOCUMENT_SYNC_STRATEGY.md (문서-코드 동기화)
+```
+
+### 11.2 관련 문서
+
+| 문서 | 역할 | 관계 |
+|------|------|------|
+| **00-DOCUMENT-INDEX.md** | 전체 문서 인덱스 | 그룹/SSOT 정의 |
+| **08-GFX-AEP-Mapping.md** | GFX-AEP 매핑 대전략 | Master 문서 |
+| **DOCUMENT_SYNC_STRATEGY.md** | 문서-코드 동기화 | 동일 그룹 종속 |
+| 01-DATA_FLOW.md | 전체 데이터 흐름 | 그룹 B Master |
+| 07-Supabase-Orchestration.md | 오케스트레이션 DDL | sync_status 연동 |
+
+### 11.3 수정 가이드라인
+
+본 문서 수정 시 08-GFX-AEP-Mapping.md와의 일관성을 확인하세요.
+
+> **SSOT 정책**: 마이그레이션 SQL (`supabase/migrations/*.sql`)이 진실의 소스.
+
+---
+
 ## 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 1.2.0 | 2026-01-16 | 문서 그룹 인덱스 섹션 추가 |
 | 1.1.0 | 2026-01-18 | 스키마 덤프 관리 섹션 추가 |
 | 1.0.0 | 2026-01-17 | 초기 작성 |

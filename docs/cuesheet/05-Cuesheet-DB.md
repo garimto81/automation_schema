@@ -2,14 +2,22 @@
 
 방송 진행 큐시트 관리를 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 2.1.0
-**Date**: 2026-01-16
+**Version**: 2.2.0
+**Date**: 2026-01-19
 
 > ⚠️ **스키마 변경 안내 (2026-01-16)**
 > - `chip_snapshots` 테이블 삭제됨 → `wsop_chip_counts`/`gfx_hand_players` 사용
 > - `cue_items.snapshot_id` FK 제거됨
+
+> ✅ **분석 업데이트 (2026-01-19)**
+> - Day 3 실제 데이터 기반 정밀 분석 완료
+> - JSON 필드 매핑 정의 추가 (Appendix C)
+> - 시트별 필드값 예시 5개씩 추가
+
 **Project**: Automation DB Schema
-**Source**: [Google Sheets - WSOP SC Cyprus ME Day1A](https://docs.google.com/spreadsheets/d/1XiZqoZ3DggHdafWGEzN3PTbCNmTRSt8Ab1Ofclsoc34/edit)
+**Source**:
+- [Day 1A](https://docs.google.com/spreadsheets/d/1XiZqoZ3DggHdafWGEzN3PTbCNmTRSt8Ab1Ofclsoc34/edit)
+- [Day 3](https://docs.google.com/spreadsheets/d/1-f5mQLVUmHqxg57Y7xGcQIZKiClUjQLrO8p095hbHAo/edit) (정밀 분석 기준)
 
 ---
 
@@ -153,33 +161,32 @@
            │               │
            │ 1:N           │
            ▼               │
-┌──────────────────────┐   │   ┌──────────────────────┐
-│     cue_sheets       │   │   │  chip_snapshots      │
-│     (큐시트)         │   │   │  (칩카운트 스냅샷)   │
-├──────────────────────┤   │   ├──────────────────────┤
-│ PK id: uuid          │   │   │ PK id: uuid          │
-│ UK sheet_code: text  │   │   │ FK session_id: uuid  │◄─┐
-│ FK session_id: uuid  │◄──┘   │    snapshot_time     │  │
-│    sheet_name: text  │       │    blind_level: text │  │
-│    sheet_type: enum  │       │    players_remaining │  │
-│    sheet_order: int  │       │    avg_stack: int    │  │
-│    status: enum      │       │    total_chips: bigint│ │
-│    total_items: int  │       │    data: jsonb       │  │
-│    current_item_id   │───┐   │    created_at        │  │
-│    created_at        │   │   └──────────────────────┘  │
-│    updated_at        │   │                             │
-└──────────┬───────────┘   │                             │
-           │               │                             │
-           │ 1:N           │                             │
-           ▼               │                             │
-┌──────────────────────┐   │                             │
-│     cue_items        │◄──┘                             │
-│   (큐 아이템)        │                                 │
-├──────────────────────┤     ⭐ LIVE 시트 매핑          │
-│ PK id: uuid          │                                 │
-│ FK sheet_id: uuid    │                                 │
-│ FK template_id: uuid │◄─────────────────────┐         │
-│ FK snapshot_id: uuid │─────────────────────────────────┘
+┌──────────────────────┐   │
+│     cue_sheets       │   │
+│     (큐시트)         │   │
+├──────────────────────┤   │
+│ PK id: uuid          │   │
+│ UK sheet_code: text  │   │
+│ FK session_id: uuid  │◄──┘
+│    sheet_name: text  │
+│    sheet_type: enum  │
+│    sheet_order: int  │
+│    status: enum      │
+│    total_items: int  │
+│    current_item_id   │───┐
+│    created_at        │   │
+│    updated_at        │   │
+└──────────┬───────────┘   │
+           │               │
+           │ 1:N           │
+           ▼               │
+┌──────────────────────┐   │
+│     cue_items        │◄──┘
+│   (큐 아이템)        │
+├──────────────────────┤     ⭐ LIVE 시트 매핑
+│ PK id: uuid          │
+│ FK sheet_id: uuid    │
+│ FK template_id: uuid │◄─────────────────────┐
 │    content_type: enum│     MAIN, SUB, VIRTUAL, OPENING
 │    hand_number: int  │     핸드 번호 (1-176)
 │    hand_rank: text   │     A, B, B-, C
@@ -643,6 +650,7 @@ CREATE TABLE cue_items (
 
     -- 큐 식별
     cue_number TEXT,  -- 자동 생성: "Q001", "Q002"
+    title TEXT,       -- 큐 아이템 제목/설명
     cue_type cue_item_type,  -- GFX 요소 타입
 
     -- GFX 정보
@@ -1699,3 +1707,456 @@ CREATE POLICY "gfx_triggers_insert_service"
   "subtitle_confirm": "[LEFT]MINI_CHIP_TABLE 24\nGLOSHKIN / 86,500\nASMOLOVA / 75,200\nCOBOS / 62,500\nGARCIA / 49,000\nISTOMIN / 46,500 (WINNER)\nKORENEV / 46,000\nCOHEN / 43,800\nCHUDAPAL / 40,500\nBLINDS 300/500 - 500 (BB)"
 }
 ```
+
+---
+
+## Appendix C: JSON 필드 매핑 정의서
+
+> 📋 **참조**: 상세 분석은 `docs/CUESHEET_FIELD_ANALYSIS.md` 참조
+
+### C.1 Google Sheets → DB 필드 매핑
+
+#### C.1.1 INFO 시트 → broadcast_sessions.block_stats (JSONB)
+
+| 시트 컬럼 | JSON 키 | 타입 | 예시 값 |
+|-----------|---------|------|---------|
+| BLOCK | `block_number` | INTEGER | 1 |
+| MAIN | `main_hands` | INTEGER | 11 |
+| SUB | `sub_hands` | INTEGER | 8 |
+| HANDS | `total_hands` | INTEGER | 19 |
+| VIRTUAL | `virtual_count` | INTEGER | 5 |
+| Estimated RT | `estimated_runtime` | TEXT | "0:56:20" |
+| Actual RT | `actual_runtime` | TEXT | "01:01:02" |
+| BREAK (방송) | `break_broadcast` | TEXT | "0:15:00" |
+| Break (실제) | `break_actual` | TEXT | "0:15:00" |
+
+**JSON 구조 예시:**
+```json
+{
+  "blocks": [
+    {
+      "block_number": 1,
+      "main_hands": 11,
+      "sub_hands": 8,
+      "total_hands": 19,
+      "virtual_count": 5,
+      "estimated_runtime": "0:56:20",
+      "actual_runtime": "01:01:02",
+      "break_broadcast": null,
+      "break_actual": null
+    },
+    {
+      "block_number": 3,
+      "main_hands": 4,
+      "sub_hands": 5,
+      "total_hands": 9,
+      "virtual_count": 2,
+      "estimated_runtime": "0:25:00",
+      "actual_runtime": "00:27:16",
+      "break_broadcast": "0:15:00",
+      "break_actual": "0:15:00"
+    }
+  ],
+  "totals": {
+    "total_main": 63,
+    "total_sub": 71,
+    "total_hands": 134,
+    "total_virtual": 32,
+    "total_runtime": "06:19:52"
+  }
+}
+```
+
+#### C.1.2 main/sub 시트 → cue_items 테이블
+
+| 시트 컬럼 | DB 필드 | 타입 | 예시 값 |
+|-----------|---------|------|---------|
+| FIELD | `field_count` | INTEGER | 112 |
+| Cyprus | `recording_time` | TIME | "12:06" |
+| Seoul | `seoul_time` | TIME | "18:06" |
+| # | `hand_number` | INTEGER | 1 |
+| 📋 | `copy_status` | TEXT | "복사완료" |
+| File | `file_name` | TEXT | "A_0001", "B_0002" |
+| 🏆 | `hand_rank` | ENUM | 'A', 'B', 'B-', 'C' |
+| Hand History | `hand_history` | TEXT | "VORONIN A5 RAISE..." |
+| Edit Point | `edit_point` | TEXT | "프리플랍부터" |
+| PD Note | `pd_note` | TEXT | "VORONIN WIN" |
+
+**신규 필드 추가 필요:**
+```sql
+ALTER TABLE cue_items ADD COLUMN field_count INTEGER;
+ALTER TABLE cue_items ADD COLUMN seoul_time TIME;
+```
+
+#### C.1.3 virtual 시트 → cue_items 테이블
+
+| 시트 컬럼 | DB 필드 | 타입 | 예시 값 |
+|-----------|---------|------|---------|
+| Blinds | `blind_level` | TEXT | "6K/12K" |
+| Cyprus | `recording_time` | TIME | "12:13" |
+| Seoul | `seoul_time` | TIME | "18:13" |
+| # | `hand_number` | INTEGER | 1 |
+| 📋 | `copy_status` | TEXT | "복사완료" |
+| File | `file_name` | TEXT | "1413_SC001_Opening01" |
+| 🏆 | `hand_rank` | ENUM | 'SOFT', 'A', 'B' |
+| Hand History | `hand_history` | TEXT | "Dealer & chip setup sketch" |
+| Edit Point | `edit_point` | TEXT | - |
+| Subtitle | `subtitle_confirm` | TEXT | "Player intro..." |
+| PD Note | `pd_note` | TEXT | "Opening" |
+
+#### C.1.4 chipcount 시트 → wsop_chip_counts 테이블
+
+| 시트 컬럼 | DB 필드 | 타입 | 예시 값 |
+|-----------|---------|------|---------|
+| Rank | `chip_rank` | INTEGER | 1 |
+| PokerRoom | `poker_room` | TEXT | "WSOP" |
+| TableName | `table_name` | TEXT | "Feature Table" |
+| TableId | `table_id` | INTEGER | 44186 |
+| TableNo | `table_no` | INTEGER | 101 |
+| SeatId | `seat_id` | INTEGER | 1001 |
+| SeatNo | `seat_no` | INTEGER | 1 |
+| PlayerId | `pokercaster_player_id` | INTEGER | 12345 |
+| PlayerName | `player_name` | TEXT | "Vadzim Lipauka" |
+| Nationality | `country_code` | TEXT | "BY" |
+| Chipcount | `chip_count` | BIGINT | 2145000 |
+| BB | `bb_stack` | INTEGER | 53 |
+
+### C.2 GFX 템플릿별 JSON 스키마
+
+#### C.2.1 Mini Chip Table (`mini_chip_left`, `mini_chip_right`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["table_no", "players", "blinds"],
+  "properties": {
+    "position": {
+      "type": "string",
+      "enum": ["LEFT", "RIGHT"]
+    },
+    "table_no": {
+      "type": "integer",
+      "description": "테이블 번호"
+    },
+    "players": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 9,
+      "items": {
+        "type": "object",
+        "required": ["name", "chips"],
+        "properties": {
+          "name": {"type": "string"},
+          "chips": {"type": "integer"},
+          "is_winner": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    "blinds": {
+      "type": "string",
+      "pattern": "^\\d+[KM]?/\\d+[KM]? - \\d+[KM]? \\(BB\\)$"
+    }
+  }
+}
+```
+
+**실제 데이터 예시:**
+```json
+{
+  "position": "LEFT",
+  "table_no": 24,
+  "players": [
+    {"name": "DAVID", "chips": 21240000, "is_winner": false},
+    {"name": "J.SANGHYON CHEONG", "chips": 10030000, "is_winner": true},
+    {"name": "JAEWON", "chips": 10030000, "is_winner": false},
+    {"name": "S.CAMILO TORO HENAO", "chips": 10000000, "is_winner": false},
+    {"name": "L.PARK", "chips": 10000000, "is_winner": false},
+    {"name": "MIKE", "chips": 9980000, "is_winner": false},
+    {"name": "YOHAN", "chips": 8750000, "is_winner": false}
+  ],
+  "blinds": "1K/2K - 2K (BB)"
+}
+```
+
+#### C.2.2 Mini Payouts Table (`mini_payouts`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["payouts", "blinds"],
+  "properties": {
+    "position": {
+      "type": "string",
+      "enum": ["LEFT", "RIGHT"]
+    },
+    "payouts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["placement", "amount"],
+        "properties": {
+          "placement": {"type": "string"},
+          "player_name": {"type": "string"},
+          "country": {"type": "string"},
+          "amount": {"type": "integer"}
+        }
+      }
+    },
+    "blinds": {"type": "string"}
+  }
+}
+```
+
+**실제 데이터 예시:**
+```json
+{
+  "position": "LEFT",
+  "payouts": [
+    {"placement": "14TH-15TH", "amount": 42000},
+    {"placement": "16TH-21ST", "amount": 35500},
+    {"placement": "22ND", "player_name": "ZED LEE", "country": "KOREA", "amount": 35500}
+  ],
+  "blinds": "1K/2K - 2K (BB)"
+}
+```
+
+#### C.2.3 Feature Table Chip (`feature_table_chip`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["table_no", "players", "blinds"],
+  "properties": {
+    "table_no": {"type": "integer"},
+    "players": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 10,
+      "items": {
+        "type": "object",
+        "required": ["name", "country", "chips"],
+        "properties": {
+          "seat": {"type": "integer"},
+          "name": {"type": "string"},
+          "country": {"type": "string"},
+          "chips": {"type": "integer"},
+          "level": {"type": "integer"}
+        }
+      }
+    },
+    "blinds": {"type": "string"}
+  }
+}
+```
+
+#### C.2.4 Player Profile (`player_profile`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["name", "country"],
+  "properties": {
+    "name": {"type": "string"},
+    "country": {"type": "string"},
+    "country_code": {"type": "string", "pattern": "^[A-Z]{2}$"},
+    "profile_image": {"type": "string", "format": "uri"},
+    "achievement": {"type": "string"},
+    "ranking_info": {"type": "string"},
+    "prize_info": {"type": "string"}
+  }
+}
+```
+
+**실제 데이터 예시:**
+```json
+{
+  "name": "MIKHAIL SHALAMOV",
+  "country": "RUSSIA",
+  "country_code": "RU",
+  "profile_image": "/images/players/shalamov.jpg",
+  "achievement": "WSOP BRACELET WINNER",
+  "ranking_info": "3RD ON RUSSIA ALL TIME MONEY LIST",
+  "prize_info": "$2,084,179"
+}
+```
+
+#### C.2.5 Elimination (`eliminated`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["player_name", "country", "placement", "prize"],
+  "properties": {
+    "player_name": {"type": "string"},
+    "country": {"type": "string"},
+    "country_code": {"type": "string"},
+    "placement": {"type": "string"},
+    "prize": {"type": "integer"}
+  }
+}
+```
+
+**실제 데이터 예시:**
+```json
+{
+  "player_name": "SAMUEL JU",
+  "country": "GERMANY",
+  "country_code": "DE",
+  "placement": "42ND",
+  "prize": 10300
+}
+```
+
+#### C.2.6 Elimination at Risk (`elimination_risk`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["player_name", "potential_placement", "potential_prize"],
+  "properties": {
+    "player_name": {"type": "string"},
+    "country": {"type": "string"},
+    "potential_placement": {"type": "string"},
+    "potential_prize": {"type": "integer"},
+    "chips": {"type": "integer"},
+    "bb_stack": {"type": "integer"}
+  }
+}
+```
+
+#### C.2.7 Leaderboard (`leaderboard`)
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["players", "players_remaining"],
+  "properties": {
+    "title": {"type": "string"},
+    "players_remaining": {"type": "integer"},
+    "avg_stack": {"type": "integer"},
+    "players": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["rank", "name", "country", "chips", "bb"],
+        "properties": {
+          "rank": {"type": "integer"},
+          "name": {"type": "string"},
+          "country": {"type": "string"},
+          "country_code": {"type": "string"},
+          "chips": {"type": "integer"},
+          "bb": {"type": "integer"}
+        }
+      }
+    }
+  }
+}
+```
+
+**실제 데이터 예시 (Day 3 종료 시점):**
+```json
+{
+  "title": "WSOP SC Cyprus ME - Day 3 End",
+  "players_remaining": 24,
+  "avg_stack": 2625000,
+  "players": [
+    {"rank": 1, "name": "Jon Kyte", "country": "Norway", "country_code": "NO", "chips": 5510000, "bb": 69},
+    {"rank": 2, "name": "Andrei Spataru", "country": "Romania", "country_code": "RO", "chips": 4905000, "bb": 61},
+    {"rank": 3, "name": "Daniel Rezaei", "country": "Austria", "country_code": "AT", "chips": 4700000, "bb": 59},
+    {"rank": 4, "name": "Mehmet Dalkilic", "country": "Turkey", "country_code": "TR", "chips": 4165000, "bb": 52},
+    {"rank": 5, "name": "Georgios Tsouloftas", "country": "Cyprus", "country_code": "CY", "chips": 4040000, "bb": 51}
+  ]
+}
+```
+
+### C.3 파일명 패턴 정의
+
+| 패턴 | 정규식 | 예시 | 설명 |
+|------|--------|------|------|
+| MAIN 핸드 | `^A_\d{4}$` | A_0001 | 메인 테이블 핸드 |
+| SUB 핸드 | `^B_\d{4}$` | B_0002 | 서브 테이블 핸드 |
+| 소프트 콘텐츠 | `^\d{4}_SC\d{3}_.*` | 1438_SC011_Mikhail_Shalamov_L3_Profile | 플레이어 프로필 등 |
+| 버추얼 테이블 | `^\d{4}_VT\d{3}_.*` | 1626_VT001_SIBGATOVA_lose | 버추얼 테이블 핸드 |
+| 오프닝 | `^\d{4}_SC\d{3}_Opening\d{2}.*` | 1413_SC001_Opening01 | 오프닝 시퀀스 |
+
+### C.4 시간대 변환 규칙
+
+| 시간대 | UTC 오프셋 | 예시 |
+|--------|------------|------|
+| Cyprus | UTC+2 (EET) / UTC+3 (EEST) | 12:06 Cyprus |
+| Seoul | UTC+9 (KST) | 18:06 Seoul |
+
+**변환 공식:**
+```
+Seoul Time = Cyprus Time + 6 hours (summer)
+Seoul Time = Cyprus Time + 7 hours (winter)
+```
+
+### C.5 블라인드 레벨 포맷
+
+| 포맷 | 정규식 | 예시 |
+|------|--------|------|
+| 기본 | `^\d+[KM]?/\d+[KM]?$` | "6K/12K" |
+| BB 포함 | `^\d+[KM]?/\d+[KM]? - \d+[KM]? \(BB\)$` | "1K/2K - 2K (BB)" |
+| 앤티 포함 | `^\d+[KM]?/\d+[KM]?/\d+[KM]?$` | "6K/12K/12K" |
+
+---
+
+## Appendix D: 시트별 필드값 예시 (5개)
+
+### D.1 INFO 시트
+
+| BLOCK | MAIN | SUB | HANDS | VIRTUAL | Estimated RT | Actual RT |
+|-------|------|-----|-------|---------|--------------|-----------|
+| 1 | 11 | 8 | 19 | 5 | 0:56:20 | 01:01:02 |
+| 2 | 6 | 6 | 12 | 7 | 0:37:30 | 00:37:43 |
+| 3 | 4 | 5 | 9 | 2 | 0:25:00 | 00:27:16 |
+| 7 | 0 | 15 | 15 | 1 | 0:30:30 | 00:31:50 |
+| 11 | 5 | 7 | 12 | 3 | 0:25:30 | 00:31:16 |
+
+### D.2 main 시트
+
+| FIELD | Cyprus | Seoul | # | File | 🏆 | PD Note |
+|-------|--------|-------|---|------|----|---------|
+| 112 | 12:06 | 18:06 | 1 | A_0001 | B | VORONIN WIN |
+| 110 | 12:18 | 18:18 | 3 | A_0003 | A | LIPAUKA KK WIN |
+| 97 | 13:07 | 19:07 | 22 | A_0022 | B- | ISAR WIN |
+| 56 | 15:46 | 21:46 | 68 | A_0068 | A | DIMOV ELIMINATED |
+| 24 | 19:12 | 01:12 | 119 | A_0119 | B | LIPAUKA WIN |
+
+### D.3 sub 시트
+
+| FIELD | Cyprus | Seoul | # | File | 🏆 | PD Note |
+|-------|--------|-------|---|------|----|---------|
+| 112 | 12:06 | 18:06 | 1 | B_0002 | B- | MARTINS AK WIN |
+| 112 | 12:08 | 18:08 | 2 | B_0003 | A | ZHAO JT WIN |
+| 110 | 12:12 | 18:12 | 3 | B_0004 | B | MARTINS JT WIN |
+| 108 | 12:16 | 18:16 | 4 | B_0005 | B | TSOULOFTAS JT WIN |
+| 24 | 19:14 | 01:14 | 132 | B_0132 | B | - |
+
+### D.4 virtual 시트
+
+| # | Cyprus | File | 🏆 | Description | PD Note |
+|---|--------|------|----|-------------|---------|
+| 1 | 12:13 | 1413_SC001_Opening01 | SOFT | Dealer & chip setup | Opening |
+| 4 | 12:38 | 1438_SC011_Mikhail_Shalamov_L3_Profile | SOFT | Player intro | Mikhail Shalamov / RU |
+| 22 | 14:22 | 1626_VT001_SIBGATOVA_lose | A | K♠6♣ vs 9♣8♠ | Virtual table |
+| 52 | 17:00 | 1900_VT005_Weis | A | KK vs JJ River J | Oliver Weis / DE ELIMINATED |
+| 56 | - | - | SOFT | Closing sequence | Closing |
+
+### D.5 leaderboard 시트 (최종 24명)
+
+| Rank | PlayerName | Nationality | Chipcount | BB |
+|------|------------|-------------|-----------|-----|
+| 1 | Jon Kyte | NO | 5,510,000 | 69 |
+| 2 | Andrei Spataru | RO | 4,905,000 | 61 |
+| 3 | Daniel Rezaei | AT | 4,700,000 | 59 |
+| 4 | Mehmet Dalkilic | TR | 4,165,000 | 52 |
+| 5 | Georgios Tsouloftas | CY | 4,040,000 | 51 |

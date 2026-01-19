@@ -1,9 +1,12 @@
 # 10. Internal Reference - ENUM, 트리거, 함수 목록
 
-**Version**: 1.0.0
-**Last Updated**: 2026-01-22
+**Version**: 1.1.0
+**Last Updated**: 2026-01-19
 
 이 문서는 마이그레이션에 정의된 모든 ENUM 타입, 트리거, 함수를 정리한 내부 참조 문서입니다.
+
+> ⚠️ **SSOT 주의**: 이 문서는 참조용이며, 실제 정의는 **마이그레이션 SQL 파일**(`supabase/migrations/*.sql`)이 SSOT입니다.
+> 현재 마이그레이션 파일: **27개** (20260113 ~ 20260122)
 
 ---
 
@@ -292,7 +295,7 @@ ORDER BY tablename, indexname;
 | 문서 | 내용 |
 |------|------|
 | `docs/02-GFX-JSON-DB.md` | GFX 스키마 상세 |
-| `docs/03-WSOP-DB.md` | WSOP 스키마 상세 |
+| `docs/03-WSOP+-DB.md` | WSOP+ 스키마 상세 |
 | `docs/04-Manual-DB.md` | Manual 스키마 상세 |
 | `docs/05-Cuesheet-DB.md` | Cuesheet 스키마 상세 |
 | `docs/07-Supabase-Orchestration.md` | Orchestration 스키마 상세 |
