@@ -2,9 +2,13 @@
 
 WSOP+ 플랫폼 데이터 저장을 위한 PostgreSQL/Supabase 데이터베이스 스키마 설계 문서
 
-**Version**: 1.0.0
-**Date**: 2026-01-13
+**Version**: 2.0.0
+**Date**: 2026-01-19
 **Project**: Automation DB Schema
+
+### Changelog
+- **v2.0.0** (2026-01-19): GFX 연계 역할 강화, Cuesheet 통합 제공 데이터 명세 추가
+- **v1.0.0** (2026-01-13): 초기 스키마 설계
 
 ---
 
@@ -18,8 +22,47 @@ WSOP+ 플랫폼에서 내보낸 JSON/CSV 파일을 정규화된 관계형 데이
 - 실시간 칩 카운트 히스토리 추적
 - 순위표 스냅샷 관리
 - 임포트 로그 및 오류 추적
+- **🌐 GFX/Cuesheet 통합 제공 데이터 관리** (v2.0 추가)
 
-### 1.2 데이터 소스
+### 1.2 WSOP+ 통합 제공 역할 (v2.0 추가)
+
+> **핵심**: WSOP+는 GFX JSON에서 제공되지 않는 **플레이어 메타데이터의 통합 제공자**입니다.
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    WSOP+ 통합 제공 데이터 (GFX → Cuesheet 연계)                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+    ┌──────────────────────────────────────────────────────────────────────┐
+    │                        🌐 WSOP+ 통합 제공 데이터                        │
+    ├──────────────────────────────────────────────────────────────────────┤
+    │ • 플레이어 국가 (nationality, country_code)                           │
+    │ • 프로필 이미지 (profile_image_url)                                   │
+    │ • 성취 기록 (achievement, bracelets, total_earnings)                 │
+    │ • PlayerProfile 전체 정보                                             │
+    │ • Elimination 전체 정보 (순위, 상금)                                   │
+    │ • 이벤트 정보 (제목, 바이인, 참가자 수)                                 │
+    │ • 공식 상금 테이블 (Payout Structure)                                  │
+    │                                                                      │
+    │ ※ GFX에 등록된 모든 플레이어는 WSOP+에서도 정보 제공됨                   │
+    └──────────────────────────────────────────────────────────────────────┘
+```
+
+**GFX 템플릿별 WSOP+ 제공 데이터:**
+
+| GFX 템플릿 | WSOP+ 제공 데이터 | 비고 |
+|------------|-------------------|------|
+| **Leaderboard** | 국가, 국가코드 | 칩/rank는 GFX 제공 |
+| **PlayerProfile** | **전체** (이름, 국가, 이미지, 성취, 브레이슬릿) | WSOP+ 단독 제공 |
+| **Elimination** | **전체** (이름, 국가, 순위, 상금) | 핸드 분석만 GFX |
+| **VPIP Stats** | 국가, 국가코드 | VPIP는 GFX 제공 |
+| **ChipFlow** | 국가, 국가코드 | 칩 히스토리는 GFX 제공 |
+| **Event Info** | **전체** | WSOP+ 단독 제공 |
+| **Prize Display** | **전체** | WSOP+ 단독 제공 |
+
+> **참조**: `docs/GFX_SUPABASE_CUESHEET_MAPPING.md` Appendix C, D
+
+### 1.3 데이터 소스
 
 | 소스 타입 | 설명 |
 |-----------|------|
@@ -27,7 +70,7 @@ WSOP+ 플랫폼에서 내보낸 JSON/CSV 파일을 정규화된 관계형 데이
 | CSV 파일 | 칩 카운트, 순위표 등 대량 데이터 |
 | (향후) API | WSOP+ 실시간 API 연동 |
 
-### 1.3 데이터 구조 요약
+### 1.4 데이터 구조 요약
 
 ```
 WSOP+ Data
@@ -204,10 +247,21 @@ CREATE TYPE wsop_chip_source AS ENUM (
 
 ### 4.1 wsop_players (플레이어 마스터)
 
+> **🌐 GFX 연계 핵심 테이블**: GFX에서 제공되지 않는 플레이어 메타데이터의 **통합 소스**
+>
+> | 필드 | GFX 연계 용도 |
+> |------|---------------|
+> | `country_code` | Leaderboard, VPIP Stats, ChipFlow 국가 표시 |
+> | `country_name` | PlayerProfile, Elimination 국가명 |
+> | `profile_image_url` | PlayerProfile 이미지 |
+> | `wsop_bracelets` | PlayerProfile 성취 표시 |
+> | `lifetime_earnings` | PlayerProfile 상금 정보 |
+
 ```sql
 -- ============================================================================
 -- wsop_players: WSOP+ 플레이어 마스터 테이블
 -- WSOP+ 플랫폼의 플레이어 프로필 정보 저장
+-- 🌐 GFX 연계: 국가, 이미지, 성취 정보의 통합 소스
 -- ============================================================================
 
 CREATE TABLE wsop_players (
@@ -1078,7 +1132,122 @@ CREATE POLICY "wsop_import_logs_all_service"
 
 ---
 
-## Appendix: 상금 금액 단위
+## 12. GFX-Cuesheet 연계 (v2.0 추가)
+
+### 12.1 WSOP+ → Cuesheet gfx_data 변환
+
+WSOP+ 데이터가 Cuesheet `gfx_data` JSONB로 변환되는 흐름:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    WSOP+ → Cuesheet 변환 파이프라인                           │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
+│   WSOP+ Tables      │     │   Transformer       │     │   Cuesheet Output   │
+├─────────────────────┤     ├─────────────────────┤     ├─────────────────────┤
+│ wsop_players        │────▶│                     │     │                     │
+│  • country_code     │     │  WsopToCuesheet     │────▶│  cue_items.gfx_data │
+│  • country_name     │     │  Transformer        │     │                     │
+│  • profile_image_url│     │                     │     │  {                  │
+│  • wsop_bracelets   │     │  + GFX 데이터 병합   │     │    "country": "RU", │
+│  • lifetime_earnings│     │  + 이름 대문자 변환  │     │    "profile_image": │
+├─────────────────────┤     │                     │     │      "/img/...",    │
+│ wsop_events         │────▶│                     │     │    "achievement":   │
+│  • event_name       │     └─────────────────────┘     │      "BRACELET..."  │
+│  • prize_pool       │                                 │  }                  │
+│  • payouts          │                                 └─────────────────────┘
+└─────────────────────┘
+```
+
+### 12.2 GFX 템플릿별 WSOP+ 필드 매핑
+
+#### 12.2.1 PlayerProfile (L3_Profile) - WSOP+ 단독 제공
+
+```sql
+-- PlayerProfile gfx_data 생성 쿼리
+SELECT jsonb_build_object(
+    'name', UPPER(wp.name),
+    'country', wp.country_name,
+    'country_code', wp.country_code,
+    'profile_image', wp.profile_image_url,
+    'achievement', wp.additional_info->>'achievement',
+    'wsop_bracelets', wp.wsop_bracelets,
+    'prize_info', format('$%s', to_char(wp.lifetime_earnings / 100.0, 'FM999,999,999'))
+) AS gfx_data
+FROM wsop_players wp
+WHERE wp.id = :player_id;
+```
+
+#### 12.2.2 Elimination - WSOP+ 단독 제공
+
+```sql
+-- Elimination gfx_data 생성 쿼리
+SELECT jsonb_build_object(
+    'player_name', UPPER(wp.name),
+    'country', wp.country_name,
+    'country_code', wp.country_code,
+    'placement', format('%s%s', ep.rank,
+        CASE
+            WHEN ep.rank % 10 = 1 AND ep.rank % 100 != 11 THEN 'ST'
+            WHEN ep.rank % 10 = 2 AND ep.rank % 100 != 12 THEN 'ND'
+            WHEN ep.rank % 10 = 3 AND ep.rank % 100 != 13 THEN 'RD'
+            ELSE 'TH'
+        END),
+    'prize', ep.prize_won / 100  -- cents → dollars
+) AS gfx_data
+FROM wsop_event_players ep
+JOIN wsop_players wp ON ep.player_id = wp.id
+WHERE ep.id = :elimination_id;
+```
+
+#### 12.2.3 Leaderboard 국가 정보 - WSOP+ 제공
+
+```sql
+-- Leaderboard gfx_data 생성 (GFX 칩 + WSOP+ 국가)
+SELECT jsonb_build_object(
+    'players', jsonb_agg(
+        jsonb_build_object(
+            'rank', hp.rank,
+            'name', UPPER(gp.long_name),
+            'country', wp.country_name,      -- 🌐 WSOP+
+            'country_code', wp.country_code, -- 🌐 WSOP+
+            'chips', hp.end_stack_amt
+        ) ORDER BY hp.rank
+    )
+) AS gfx_data
+FROM gfx_hand_players hp
+JOIN gfx_players gp ON hp.player_id = gp.id
+LEFT JOIN player_link_mapping plm ON gp.id = plm.gfx_player_id
+LEFT JOIN wsop_players wp ON plm.wsop_player_id = wp.id
+WHERE hp.hand_id = :hand_id;
+```
+
+### 12.3 GFX-WSOP+ 플레이어 연결
+
+GFX 플레이어와 WSOP+ 플레이어를 연결하는 `player_link_mapping` 테이블 활용:
+
+```sql
+-- GFX 플레이어의 WSOP+ 국가 정보 조회
+SELECT
+    gp.id AS gfx_player_id,
+    gp.name AS gfx_name,
+    wp.country_code,
+    wp.country_name,
+    wp.profile_image_url
+FROM gfx_players gp
+JOIN player_link_mapping plm ON gp.id = plm.gfx_player_id
+JOIN wsop_players wp ON plm.wsop_player_id = wp.id
+WHERE plm.is_verified = TRUE;
+```
+
+> **참조 문서**:
+> - `docs/GFX_SUPABASE_CUESHEET_MAPPING.md` - 3계층 매핑 상세
+> - `docs/manual/04-Manual-DB.md` - player_link_mapping 스키마
+
+---
+
+## Appendix A: 상금 금액 단위
 
 모든 금액 필드는 **cents (센트) 단위**로 저장:
 
@@ -1092,3 +1261,14 @@ CREATE POLICY "wsop_import_logs_all_service"
 - 부동소수점 오차 방지
 - 정수 연산으로 정확한 계산
 - BIGINT로 최대 $92,233,720,368,547,758.07 까지 저장 가능
+
+---
+
+## Appendix B: 관련 문서 참조
+
+| 문서 | 역할 |
+|------|------|
+| `docs/GFX_SUPABASE_CUESHEET_MAPPING.md` | GFX → Supabase → Cuesheet 3계층 매핑 |
+| `docs/gfx-json/02-GFX-JSON-DB.md` | GFX JSON 스키마 (칩, VPIP 등) |
+| `docs/manual/04-Manual-DB.md` | 수동 오버라이드 및 플레이어 연결 |
+| `docs/cuesheet/05-Cuesheet-DB.md` | Cuesheet gfx_data 스키마 |
