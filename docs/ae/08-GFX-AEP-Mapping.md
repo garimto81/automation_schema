@@ -1930,3 +1930,62 @@ Supabase DB에 두 개의 독립적인 GFX 관련 스키마가 존재하며, 데
 | 마이그레이션 추가 | migrations/*.sql | DOCUMENT_SYNC_STRATEGY 검증 |
 
 > **SSOT 정책**: 마이그레이션 SQL (`supabase/migrations/*.sql`)이 진실의 소스. 본 문서와 마이그레이션이 다르면 마이그레이션이 정답.
+
+---
+
+## Appendix A: AEP 매핑 관련 테이블 (Supabase)
+
+### A.1 gfx_aep_compositions
+
+GFX → AEP 26개 컴포지션의 메타데이터 저장 테이블.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | UUID | 기본 키 |
+| `name` | VARCHAR(255) | 컴포지션 고유 이름 (UNIQUE) |
+| `category` | ENUM | 카테고리 (chip_display, player_info 등) |
+| `display_name` | VARCHAR(255) | UI 표시용 이름 |
+| `slot_count` | INTEGER | 슬롯 수 (예: Mini Chip Count는 9) |
+| `slot_field_keys` | TEXT[] | 슬롯별 필드 키 배열 |
+| `single_field_keys` | TEXT[] | 단일 필드 키 배열 |
+| `aep_project_path` | TEXT | AEP 프로젝트 파일 경로 |
+| `aep_comp_name` | TEXT | AEP 내 컴포지션 이름 |
+| `is_active` | BOOLEAN | 활성 상태 |
+| `created_at` | TIMESTAMPTZ | 생성 시간 |
+
+**마이그레이션**: `20260114120000_gfx_aep_render_mapping.sql:110`
+
+### A.2 gfx_aep_field_mappings
+
+GFX 데이터 → AEP 컴포지션 필드 매핑 규칙 저장 테이블.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | UUID | 기본 키 |
+| `composition_name` | VARCHAR(255) | FK → gfx_aep_compositions.name |
+| `target_field_key` | VARCHAR(100) | 대상 필드 키 (예: "name", "chips") |
+| `target_layer_pattern` | VARCHAR(255) | AEP 레이어 패턴 |
+| `slot_range_start` | INTEGER | 슬롯 범위 시작 (1-based) |
+| `slot_range_end` | INTEGER | 슬롯 범위 끝 |
+| `source_table` | VARCHAR(100) | 소스 테이블 (예: "gfx_hand_players") |
+| `source_column` | VARCHAR(100) | 소스 컬럼 (예: "end_stack_amt") |
+| `transform` | ENUM | 변환 타입 (UPPER, format_chips 등) |
+| `is_active` | BOOLEAN | 활성 상태 |
+
+**마이그레이션**: `20260114120000_gfx_aep_render_mapping.sql:56`
+
+### A.3 aep_media_sources
+
+AEP 렌더링용 미디어 파일 경로 관리 테이블 (국기, 프로필 이미지 등).
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| `id` | UUID | 기본 키 |
+| `category` | VARCHAR(50) | 카테고리 (flag, profile 등) |
+| `country_code` | VARCHAR(10) | 국가 코드 (ISO 3166-1) |
+| `name` | TEXT | 파일 이름/설명 |
+| `file_path` | TEXT | 파일 경로 |
+| `file_type` | VARCHAR(20) | 파일 타입 (png, jpg) |
+| `is_active` | BOOLEAN | 활성 상태 |
+
+**마이그레이션**: `20260114130000_08_aep_mapping_functions.sql:11`

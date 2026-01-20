@@ -1,6 +1,6 @@
 # 00. 문서 인덱스 및 그룹 관리
 
-**Version**: 2.1.0
+**Version**: 2.2.0
 **Last Updated**: 2026-01-19
 **Status**: Active
 **Project**: Automation DB Schema
@@ -15,6 +15,7 @@ docs/
 ├── 01-DATA_FLOW.md             # 전체 데이터 흐름 개요
 ├── 10-Internal-Reference.md    # 내부 참조 문서
 ├── 11-LARGE-FILE-CHUNKING-STRATEGY.md  # 대용량 파일 청킹 전략
+├── GFX_SUPABASE_CUESHEET_MAPPING.md    # ⭐ 3계층 통합 매핑 (NEW)
 │
 ├── gfx-json/                   # GFX JSON 관련 문서
 │   ├── 02-GFX-JSON-DB.md
@@ -134,6 +135,7 @@ docs/
 │   01-DATA_FLOW.md          ─── 전체 데이터 흐름 개요                         │
 │   10-Internal-Reference.md ─── 내부 참조                                    │
 │   11-LARGE-FILE-CHUNKING.md ── 대용량 파일 청킹 전략                         │
+│   GFX_SUPABASE_CUESHEET_MAPPING.md ── ⭐ 3계층 통합 매핑 (JSON→DB→방송)     │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -209,10 +211,11 @@ docs/
 | 문서 경로 | 버전 | 업데이트 | 상태 |
 |-----------|:----:|:--------:|:----:|
 | **Layer 1: 메인 문서** ||||
-| `00-DOCUMENT-INDEX.md` | 2.1.0 | 2026-01-19 | ✅ Active |
+| `00-DOCUMENT-INDEX.md` | 2.2.0 | 2026-01-19 | ✅ Active |
 | `01-DATA_FLOW.md` | 2.0.0 | 2026-01-16 | ✅ Active |
 | `10-Internal-Reference.md` | - | - | Reference |
 | `11-LARGE-FILE-CHUNKING-STRATEGY.md` | - | 2026-01-19 | ✅ Active |
+| `GFX_SUPABASE_CUESHEET_MAPPING.md` | 1.0.0 | 2026-01-19 | ✅ **NEW** |
 | **gfx-json/** ||||
 | `02-GFX-JSON-DB.md` | 1.1.0 | 2026-01-16 | ✅ Active |
 | `GFX_JSON_COMPREHENSIVE_ANALYSIS.md` | 1.0.0 | 2026-01-19 | ✅ Active |
@@ -266,6 +269,7 @@ docs/
 |--------|----------------|
 | GFX JSON | gfx-json/GFX_JSON_COMPREHENSIVE_ANALYSIS.md |
 | Cuesheet | cuesheet/CUESHEET_JSON_MAPPING.md |
+| **3계층 통합** | GFX_SUPABASE_CUESHEET_MAPPING.md |
 
 ---
 
@@ -284,10 +288,31 @@ supabase db dump --schema public > docs/supabase/current_schema_dump.sql
 
 ---
 
-## 8. 변경 이력
+## 8. 스키마 변경 이력 (주요)
+
+### 8.1 삭제된 테이블
+
+| 테이블 | 삭제일 | 마이그레이션 | 대체 | 사유 |
+|--------|--------|--------------|------|------|
+| `chip_snapshots` | 2026-01-16 | `20260116000000_schema_simplification.sql` | `unified_chip_data` VIEW | 스키마 단순화 - WSOP + GFX 통합 뷰로 대체 |
+| `manual_players` | 2026-01-16 | `20260116000000_schema_simplification.sql` | `gfx_players`, `wsop_players` | 중복 제거 - 각 소스별 플레이어 테이블로 통합 |
+
+### 8.2 타입 변경 이력
+
+| 테이블.컬럼 | 변경일 | 이전 | 이후 | 사유 |
+|------------|--------|------|------|------|
+| `gfx_hand_players.*_amt` | 2026-01-25 | INTEGER | BIGINT | 21억 칩 초과 데이터 손실 방지 |
+| `gfx_events.bet_amount` | 2026-01-25 | INTEGER | BIGINT | 대규모 팟 지원 |
+| `gfx_hands.pot_size` | 2026-01-25 | INTEGER | BIGINT | 대규모 팟 지원 |
+
+---
+
+## 9. 변경 이력
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 2.3.0 | 2026-01-25 | 스키마 변경 이력 섹션 추가, BIGINT 마이그레이션 반영 |
+| 2.2.0 | 2026-01-19 | GFX→Supabase→Cuesheet 3계층 통합 매핑 문서 추가 |
 | 2.1.0 | 2026-01-19 | Cuesheet Day 1A~5 전체 분석 통합 (CUESHEET_FIELD_ANALYSIS.md v2.0) |
 | 2.0.0 | 2026-01-19 | 폴더 구조 재편: 6개 도메인 폴더 생성 |
 | 1.2.0 | 2026-01-19 | 대용량 파일 청킹 전략 문서 추가 (그룹 E) |

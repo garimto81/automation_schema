@@ -816,7 +816,105 @@ CREATE INDEX idx_gfx_events_board ON gfx_events(event_type) WHERE event_type = '
 CREATE INDEX idx_gfx_events_order ON gfx_events(hand_id, event_order);
 ```
 
-### 4.6 hand_grades (핸드 등급)
+### 4.6 gfx_hand_cards (개별 카드 정규화)
+
+> **마이그레이션**: `20260119000000_json_public_schema_integration.sql:169`
+
+```sql
+-- ============================================================================
+-- gfx_hand_cards: 개별 카드 정규화 테이블
+-- 홀카드 + 커뮤니티 카드를 개별 레코드로 저장
+-- json.hand_cards와 대응
+-- ============================================================================
+
+CREATE TABLE gfx_hand_cards (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- 핸드 참조
+    hand_id UUID NOT NULL REFERENCES gfx_hands(id) ON DELETE CASCADE,
+
+    -- 카드 정보
+    card_rank VARCHAR(2) NOT NULL,        -- 'A', 'K', 'Q', 'J', '10', '9'...
+    card_suit CHAR(1) NOT NULL,           -- 's', 'h', 'd', 'c'
+    card_normalized VARCHAR(3) GENERATED ALWAYS AS (card_rank || card_suit) STORED,
+
+    -- 카드 유형
+    card_type VARCHAR(20) NOT NULL,       -- 'hole', 'flop', 'turn', 'river'
+    seat_number INTEGER,                  -- 홀카드인 경우 시트 번호 (1-10)
+    card_order INTEGER,                   -- 같은 타입 내 순서 (홀카드 1,2 / 플랍 1,2,3)
+    board_num INTEGER DEFAULT 0,          -- Run it twice 시 보드 번호
+
+    -- GFX 원본 데이터
+    gfx_card VARCHAR(10),                 -- 원본 GFX 표기 (예: "10d")
+    source VARCHAR(20) DEFAULT 'gfx',     -- 데이터 소스
+
+    -- 신뢰도 (AI 추론 시)
+    confidence NUMERIC(3,2) DEFAULT 1.00,
+
+    -- 타임스탬프
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 인덱스
+CREATE INDEX idx_gfx_hand_cards_hand ON gfx_hand_cards(hand_id);
+CREATE INDEX idx_gfx_hand_cards_type ON gfx_hand_cards(card_type);
+CREATE INDEX idx_gfx_hand_cards_seat ON gfx_hand_cards(seat_number) WHERE seat_number IS NOT NULL;
+```
+
+### 4.7 gfx_hand_results (핸드 결과)
+
+> **마이그레이션**: `20260119000000_json_public_schema_integration.sql:221`
+
+```sql
+-- ============================================================================
+-- gfx_hand_results: 핸드 결과 정규화 테이블
+-- 우승자, 팟 분배, 핸드 랭크 정보
+-- json.hand_results와 대응
+-- ============================================================================
+
+CREATE TABLE gfx_hand_results (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+    -- 핸드 참조
+    hand_id UUID NOT NULL REFERENCES gfx_hands(id) ON DELETE CASCADE,
+
+    -- 플레이어 정보
+    seat_number INTEGER NOT NULL,
+    player_name VARCHAR(255),
+
+    -- 결과
+    is_winner BOOLEAN NOT NULL DEFAULT FALSE,
+    won_amount NUMERIC(12,2),              -- 획득 금액
+    pot_contribution NUMERIC(12,2),        -- 팟 기여금
+    net_result NUMERIC(12,2) GENERATED ALWAYS AS (won_amount - COALESCE(pot_contribution, 0)) STORED,
+
+    -- 핸드 정보
+    hand_description VARCHAR(100),         -- 예: "Full House, Kings full of Queens"
+    hand_rank VARCHAR(50),                 -- 예: "full_house"
+    rank_value INTEGER,                    -- 핸드 랭크 숫자값 (1=royal flush ~ 10=high card)
+    kickers JSONB,                         -- 키커 카드들
+    cards_used JSONB,                      -- 사용된 5장 카드
+    best_five JSONB,                       -- 베스트 5 조합
+
+    -- Run it twice
+    board_num INTEGER DEFAULT 0,
+
+    -- 사이드팟
+    main_pot_won NUMERIC(12,2),
+    side_pot_won NUMERIC(12,2),
+    showdown_order INTEGER,                -- 쇼다운 순서
+
+    -- 타임스탬프
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 인덱스
+CREATE INDEX idx_gfx_hand_results_hand ON gfx_hand_results(hand_id);
+CREATE INDEX idx_gfx_hand_results_winner ON gfx_hand_results(is_winner) WHERE is_winner = TRUE;
+CREATE INDEX idx_gfx_hand_results_rank ON gfx_hand_results(rank_value);
+```
+
+### 4.8 hand_grades (핸드 등급)
 
 ```sql
 -- ============================================================================
