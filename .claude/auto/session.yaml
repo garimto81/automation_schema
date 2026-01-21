@@ -1,0 +1,169 @@
+session_id: auto_20260116_002
+started_at: 2026-01-16T14:00:00
+direction: "json → public 스키마 연결 전략 수립 및 구현"
+status: running
+
+tasks:
+  completed:
+    - id: task_001
+      description: "json vs public 스키마 분석"
+      agent: architect
+      started_at: 2026-01-16T14:00:00
+      completed_at: 2026-01-16T14:15:00
+      duration: 15min
+      result: |
+        - json 스키마: 6개 테이블 (RFID 실시간 파싱용)
+        - public 스키마: 32개 테이블 (AEP 렌더링용)
+        - 두 스키마 간 연결 없음 확인
+        - 권장 전략: 옵션 D (코드 수정 + 스키마 확장)
+    - id: task_002
+      description: "PRD 업데이트 (02-GFX-JSON-DB.md)"
+      agent: main
+      started_at: 2026-01-16T14:15:00
+      completed_at: 2026-01-16T14:20:00
+      duration: 5min
+      result: "Section 12. json 스키마 → public 스키마 연결 전략 추가"
+    - id: task_003
+      description: "PRD 업데이트 (08-GFX-AEP-Mapping.md)"
+      agent: main
+      started_at: 2026-01-16T14:20:00
+      completed_at: 2026-01-16T14:25:00
+      duration: 5min
+      result: "Section 15. 데이터 흐름 관점 스키마 통합 추가"
+    - id: task_004
+      description: "Phase 1-2 마이그레이션 SQL 작성"
+      agent: main
+      started_at: 2026-01-16T14:25:00
+      completed_at: 2026-01-16T14:35:00
+      duration: 10min
+      result: |
+        - 20260119000000_json_public_schema_integration.sql 생성
+        - gfx_hands: 11 컬럼 추가
+        - gfx_hand_players: 12 컬럼 추가
+        - gfx_events: 10 컬럼 추가
+        - gfx_sessions: 5 컬럼 추가
+        - gfx_hand_cards: 신규 테이블
+        - gfx_hand_results: 신규 테이블
+    - id: task_005
+      description: "Supabase 마이그레이션 적용"
+      agent: main
+      started_at: 2026-01-16T14:35:00
+      completed_at: 2026-01-16T14:36:00
+      duration: 1min
+      result: "supabase db push 성공"
+    - id: task_006
+      description: "전략 수정 - json 스키마 보존 정책으로 변경"
+      agent: main
+      started_at: 2026-01-16T15:00:00
+      completed_at: 2026-01-16T15:10:00
+      duration: 10min
+      result: |
+        사용자 피드백 반영: json 스키마는 GFX JSON 파일 원본 구조를 1:1 매핑
+        - Phase 5 (json 스키마 폐기) 제거
+        - 트리거 기반 동기화 방식으로 전략 변경
+        - PRD 02, 08 문서 모두 업데이트
+    - id: task_007
+      description: "Phase 3: 동기화 트리거 생성 (json → public)"
+      agent: database-specialist
+      started_at: 2026-01-16T15:15:00
+      completed_at: 2026-01-16T15:25:00
+      duration: 10min
+      result: |
+        6개 동기화 트리거 생성:
+        - trg_sync_gfx_sessions_to_public
+        - trg_sync_hands_to_public
+        - trg_sync_hand_players_to_public
+        - trg_sync_hand_actions_to_public
+        - trg_sync_hand_cards_to_public
+        - trg_sync_hand_results_to_public
+        + 유틸리티 함수 (enable/disable triggers)
+    - id: task_008
+      description: "Phase 4: 시뮬레이션 테스트용 샘플 데이터 생성"
+      agent: database-specialist
+      started_at: 2026-01-16T15:25:00
+      completed_at: 2026-01-16T15:35:00
+      duration: 10min
+      result: |
+        샘플 데이터 SQL 생성:
+        - 1개 세션 (WSOP Cyprus Main Event)
+        - 3개 핸드 (A/B/C급)
+        - 21명 플레이어
+        - 53개 액션
+        - 22개 카드
+        - 4개 결과
+        + 검증 쿼리 및 README
+    - id: task_009
+      description: "문서-DB 스키마 불일치 분석"
+      agent: architect
+      started_at: 2026-01-16T15:40:00
+      completed_at: 2026-01-16T15:50:00
+      duration: 10min
+      result: |
+        불일치 분석 결과:
+        - Critical: 3개 (트리거 미적용, 뷰 불일치, CDC 미구현)
+        - Warning: 8개 (컴포지션 개수, 함수 구현 방식 등)
+        - Info: 12개 (문서화 누락)
+    - id: task_010
+      description: "GitHub 이슈 등록"
+      agent: main
+      started_at: 2026-01-16T15:50:00
+      completed_at: 2026-01-16T15:51:00
+      duration: 1min
+      result: "GitHub Issue #1 생성됨"
+    - id: task_011
+      description: "문서 동기화 전략 제안서 작성"
+      agent: main
+      started_at: 2026-01-16T15:51:00
+      completed_at: 2026-01-16T16:00:00
+      duration: 9min
+      result: |
+        - DOCUMENT_SYNC_STRATEGY.md 작성
+        - validate_docs_schema.py 스크립트 생성
+        - SSOT 계층 정의: 마이그레이션 SQL이 진실의 소스
+  in_progress: []
+  pending: []
+
+statistics:
+  total_tasks: 11
+  completed: 11
+  in_progress: 0
+  pending: 0
+  total_duration: 86min
+
+conclusion: |
+  json → public 스키마 연결 전략 Phase 1-4 완료 + 문서 동기화 전략:
+
+  [Phase 1-2] public 스키마 확장 ✅
+  - gfx_hands: 11 컬럼 추가
+  - gfx_hand_players: 12 컬럼 추가
+  - gfx_events: 10 컬럼 추가
+  - gfx_sessions: 5 컬럼 추가
+  - gfx_hand_cards: 신규 테이블
+  - gfx_hand_results: 신규 테이블
+
+  [전략 수정] json 스키마 보존 정책 ✅
+  - json 스키마는 GFX 파일 원본 → 수정 금지
+  - Phase 5 (폐기) 제거 → 트리거 동기화로 변경
+
+  [Phase 3] 동기화 트리거 생성 ✅
+  - 6개 AFTER INSERT OR UPDATE 트리거
+  - 필드 매핑 자동 변환
+  - enable/disable 유틸리티 함수
+
+  [Phase 4] 샘플 데이터 생성 ✅
+  - 1세션, 3핸드 (A/B/C급), 21플레이어, 53액션
+  - 검증 쿼리 및 README
+
+  [문서-DB 동기화] ✅
+  - 불일치 분석: Critical 3, Warning 8, Info 12
+  - GitHub Issue #1 생성
+  - 동기화 전략 문서 작성
+  - 검증 스크립트 생성
+
+  [생성된 파일]
+  - 20260120000000_json_public_sync_triggers.sql
+  - sample_data_json_schema.sql
+  - verify_sample_data_json.sql
+  - README_SAMPLE_DATA.md
+  - DOCUMENT_SYNC_STRATEGY.md
+  - scripts/validate_docs_schema.py

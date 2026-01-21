@@ -21,15 +21,15 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-
 # =============================================================================
 # Data Classes (Normalized structures for DB insertion)
 # =============================================================================
+
 
 @dataclass
 class NormalizedSession:
@@ -135,6 +135,7 @@ class NormalizationResult:
 # =============================================================================
 # GFX Normalizer Class
 # =============================================================================
+
 
 class GFXNormalizer:
     """Normalize GFX JSON data to database-ready structures.
@@ -271,7 +272,8 @@ class GFXNormalizer:
             game_class=hand_data.get("GameClass", "FLOP"),
             bet_structure=hand_data.get("BetStructure", "NOLIMIT"),
             duration_seconds=self._parse_duration(hand_data.get("Duration", "")),
-            start_time=self._parse_datetime(hand_data.get("StartDateTimeUTC")) or datetime.now(),
+            start_time=self._parse_datetime(hand_data.get("StartDateTimeUTC"))
+            or datetime.now(),
             recording_offset_iso=offset_iso,
             recording_offset_seconds=offset_seconds,
             num_boards=hand_data.get("NumBoards", 1),
@@ -499,6 +501,7 @@ class GFXNormalizer:
 # Convenience Functions
 # =============================================================================
 
+
 def normalize_gfx_file(filepath: Path | str) -> NormalizationResult:
     """Convenience function to normalize a single file.
 
@@ -565,7 +568,7 @@ if __name__ == "__main__":
 
     if result.hands:
         h = result.hands[0]
-        print(f"\nFirst Hand:")
+        print("\nFirst Hand:")
         print(f"  Hand #{h.hand_num}")
         print(f"  Duration: {h.duration_seconds}s")
         print(f"  Pot: {h.pot_size}")
@@ -574,7 +577,7 @@ if __name__ == "__main__":
 
     if result.players and result.players[0]:
         p = result.players[0][0]
-        print(f"\nFirst Player in First Hand:")
+        print("\nFirst Player in First Hand:")
         print(f"  Name: {p.player_name}")
         print(f"  Seat: {p.seat_num}")
         print(f"  Hole Cards: {p.hole_cards}")
@@ -582,6 +585,8 @@ if __name__ == "__main__":
         print(f"  End Stack: {p.end_stack_amt}")
 
     if result.events and result.events[0]:
-        print(f"\nFirst 5 Events in First Hand:")
+        print("\nFirst 5 Events in First Hand:")
         for e in result.events[0][:5]:
-            print(f"  [{e.event_order}] {e.event_type} P{e.player_num} Bet:{e.bet_amt} Pot:{e.pot}")
+            print(
+                f"  [{e.event_order}] {e.event_type} P{e.player_num} Bet:{e.bet_amt} Pot:{e.pot}"
+            )

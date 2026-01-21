@@ -11,12 +11,9 @@ Usage:
 from __future__ import annotations
 
 import json
-import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
-
 
 # =============================================================================
 # DB Schema Definitions (Expected structure)
@@ -24,44 +21,118 @@ from typing import Any
 
 # ENUM values from database schema
 DB_ENUMS = {
-    "table_type": {"FEATURE_TABLE", "MAIN_TABLE", "FINAL_TABLE", "SIDE_TABLE", "UNKNOWN"},
-    "game_variant": {"HOLDEM", "OMAHA", "OMAHA_HILO", "STUD", "STUD_HILO", "RAZZ", "DRAW", "MIXED"},
+    "table_type": {
+        "FEATURE_TABLE",
+        "MAIN_TABLE",
+        "FINAL_TABLE",
+        "SIDE_TABLE",
+        "UNKNOWN",
+    },
+    "game_variant": {
+        "HOLDEM",
+        "OMAHA",
+        "OMAHA_HILO",
+        "STUD",
+        "STUD_HILO",
+        "RAZZ",
+        "DRAW",
+        "MIXED",
+    },
     "game_class": {"FLOP", "STUD", "DRAW", "MIXED"},
     "bet_structure": {"NOLIMIT", "POTLIMIT", "LIMIT", "SPREAD_LIMIT"},
     "event_type": {
-        "FOLD", "CHECK", "CALL", "BET", "RAISE", "ALL_IN", "BOARD_CARD",
-        "ANTE", "BLIND", "STRADDLE", "BRING_IN", "MUCK", "SHOW", "WIN"
+        "FOLD",
+        "CHECK",
+        "CALL",
+        "BET",
+        "RAISE",
+        "ALL_IN",
+        "BOARD_CARD",
+        "ANTE",
+        "BLIND",
+        "STRADDLE",
+        "BRING_IN",
+        "MUCK",
+        "SHOW",
+        "WIN",
     },
-    "ante_type": {"NO_ANTE", "BB_ANTE_BB1ST", "BB_ANTE_BTN1ST", "ALL_ANTE", "DEAD_ANTE"},
+    "ante_type": {
+        "NO_ANTE",
+        "BB_ANTE_BB1ST",
+        "BB_ANTE_BTN1ST",
+        "ALL_ANTE",
+        "DEAD_ANTE",
+    },
 }
 
 # Expected JSON fields at each level
 EXPECTED_SESSION_FIELDS = {
-    "ID", "CreatedDateTimeUTC", "EventTitle", "SoftwareVersion", "Type", "Payouts", "Hands"
+    "ID",
+    "CreatedDateTimeUTC",
+    "EventTitle",
+    "SoftwareVersion",
+    "Type",
+    "Payouts",
+    "Hands",
 }
 
 EXPECTED_HAND_FIELDS = {
-    "HandNum", "Duration", "StartDateTimeUTC", "RecordingOffsetStart",
-    "GameVariant", "GameClass", "BetStructure",
-    "AnteAmt", "BombPotAmt", "NumBoards", "RunItNumTimes", "Description",
-    "FlopDrawBlinds", "StudLimits", "Events", "Players"
+    "HandNum",
+    "Duration",
+    "StartDateTimeUTC",
+    "RecordingOffsetStart",
+    "GameVariant",
+    "GameClass",
+    "BetStructure",
+    "AnteAmt",
+    "BombPotAmt",
+    "NumBoards",
+    "RunItNumTimes",
+    "Description",
+    "FlopDrawBlinds",
+    "StudLimits",
+    "Events",
+    "Players",
 }
 
 EXPECTED_PLAYER_FIELDS = {
-    "PlayerNum", "Name", "LongName", "HoleCards",
-    "StartStackAmt", "EndStackAmt", "CumulativeWinningsAmt", "BlindBetStraddleAmt",
-    "SittingOut", "EliminationRank",
-    "VPIPPercent", "PreFlopRaisePercent", "AggressionFrequencyPercent", "WentToShowDownPercent"
+    "PlayerNum",
+    "Name",
+    "LongName",
+    "HoleCards",
+    "StartStackAmt",
+    "EndStackAmt",
+    "CumulativeWinningsAmt",
+    "BlindBetStraddleAmt",
+    "SittingOut",
+    "EliminationRank",
+    "VPIPPercent",
+    "PreFlopRaisePercent",
+    "AggressionFrequencyPercent",
+    "WentToShowDownPercent",
 }
 
 EXPECTED_EVENT_FIELDS = {
-    "EventType", "PlayerNum", "BetAmt", "Pot", "BoardCards", "BoardNum", "NumCardsDrawn", "DateTimeUTC"
+    "EventType",
+    "PlayerNum",
+    "BetAmt",
+    "Pot",
+    "BoardCards",
+    "BoardNum",
+    "NumCardsDrawn",
+    "DateTimeUTC",
 }
 
 EXPECTED_BLINDS_FIELDS = {
-    "AnteType", "BigBlindAmt", "BigBlindPlayerNum",
-    "SmallBlindAmt", "SmallBlindPlayerNum", "ButtonPlayerNum",
-    "ThirdBlindAmt", "ThirdBlindPlayerNum", "BlindLevel"
+    "AnteType",
+    "BigBlindAmt",
+    "BigBlindPlayerNum",
+    "SmallBlindAmt",
+    "SmallBlindPlayerNum",
+    "ButtonPlayerNum",
+    "ThirdBlindAmt",
+    "ThirdBlindPlayerNum",
+    "BlindLevel",
 }
 
 # EventType mapping (JSON → DB)
@@ -79,6 +150,7 @@ EVENT_TYPE_MAP = {
 # =============================================================================
 # Validation Report
 # =============================================================================
+
 
 @dataclass
 class ValidationReport:
@@ -106,7 +178,9 @@ class ValidationReport:
 
     # Issues
     missing_in_db: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
-    enum_mismatches: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))
+    enum_mismatches: dict[str, set[str]] = field(
+        default_factory=lambda: defaultdict(set)
+    )
     type_issues: list[str] = field(default_factory=list)
     special_cases: list[str] = field(default_factory=list)
 
@@ -241,6 +315,7 @@ class ValidationReport:
 # Validation Functions
 # =============================================================================
 
+
 def validate_file(filepath: Path, report: ValidationReport) -> None:
     """Validate a single JSON file."""
     try:
@@ -259,7 +334,9 @@ def validate_file(filepath: Path, report: ValidationReport) -> None:
     if "ID" in data:
         session_id = data["ID"]
         if not isinstance(session_id, int):
-            report.type_issues.append(f"{filepath.name}: ID is not int64 ({type(session_id).__name__})")
+            report.type_issues.append(
+                f"{filepath.name}: ID is not int64 ({type(session_id).__name__})"
+            )
 
     # Table type
     if "Type" in data:
@@ -292,7 +369,10 @@ def validate_file(filepath: Path, report: ValidationReport) -> None:
             # Check HoleCards format
             hole_cards = player.get("HoleCards", [])
             if hole_cards and hole_cards[0] and " " in hole_cards[0]:
-                if "HoleCards space-separated format detected" not in report.special_cases:
+                if (
+                    "HoleCards space-separated format detected"
+                    not in report.special_cases
+                ):
                     report.special_cases.append(
                         f"HoleCards space-separated format detected: {hole_cards[0]!r} "
                         "(needs split parsing)"

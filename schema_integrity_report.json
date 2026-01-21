@@ -1,0 +1,274 @@
+{
+  "migrations_count": 27,
+  "tables": [
+    "activity_log",
+    "aep_media_sources",
+    "api_keys",
+    "broadcast_sessions",
+    "chip_snapshots",
+    "cue_items",
+    "cue_sheets",
+    "cue_templates",
+    "gfx_aep_compositions",
+    "gfx_aep_field_mappings",
+    "gfx_events",
+    "gfx_hand_players",
+    "gfx_hands",
+    "gfx_players",
+    "gfx_sessions",
+    "gfx_triggers",
+    "hand_grades",
+    "job_queue",
+    "manual_audit_log",
+    "manual_players",
+    "notifications",
+    "player_link_mapping",
+    "player_overrides",
+    "profile_images",
+    "render_queue",
+    "sync_history",
+    "sync_log",
+    "sync_status",
+    "system_config",
+    "wsop_chip_counts",
+    "wsop_event_players",
+    "wsop_events",
+    "wsop_import_logs",
+    "wsop_players",
+    "wsop_standings"
+  ],
+  "fk_relationships": [
+    {
+      "from": "gfx_hand_players",
+      "to": "gfx_hands"
+    },
+    {
+      "from": "gfx_hand_players",
+      "to": "gfx_players"
+    },
+    {
+      "from": "gfx_events",
+      "to": "gfx_hands"
+    },
+    {
+      "from": "hand_grades",
+      "to": "gfx_hands"
+    },
+    {
+      "from": "sync_log",
+      "to": "gfx_sessions"
+    },
+    {
+      "from": "wsop_event_players",
+      "to": "wsop_events"
+    },
+    {
+      "from": "wsop_event_players",
+      "to": "wsop_players"
+    },
+    {
+      "from": "wsop_event_players",
+      "to": "wsop_players"
+    },
+    {
+      "from": "wsop_chip_counts",
+      "to": "wsop_events"
+    },
+    {
+      "from": "wsop_chip_counts",
+      "to": "wsop_players"
+    },
+    {
+      "from": "wsop_standings",
+      "to": "wsop_events"
+    },
+    {
+      "from": "wsop_standings",
+      "to": "wsop_players"
+    },
+    {
+      "from": "wsop_import_logs",
+      "to": "wsop_events"
+    },
+    {
+      "from": "profile_images",
+      "to": "manual_players"
+    },
+    {
+      "from": "player_overrides",
+      "to": "manual_players"
+    },
+    {
+      "from": "player_link_mapping",
+      "to": "manual_players"
+    },
+    {
+      "from": "cue_sheets",
+      "to": "broadcast_sessions"
+    },
+    {
+      "from": "cue_sheets",
+      "to": "cue_sheets"
+    },
+    {
+      "from": "chip_snapshots",
+      "to": "broadcast_sessions"
+    },
+    {
+      "from": "cue_items",
+      "to": "cue_sheets"
+    },
+    {
+      "from": "cue_items",
+      "to": "cue_templates"
+    },
+    {
+      "from": "cue_items",
+      "to": "chip_snapshots"
+    },
+    {
+      "from": "gfx_triggers",
+      "to": "cue_items"
+    },
+    {
+      "from": "gfx_triggers",
+      "to": "broadcast_sessions"
+    },
+    {
+      "from": "gfx_triggers",
+      "to": "cue_sheets"
+    },
+    {
+      "from": "job_queue",
+      "to": "job_queue"
+    },
+    {
+      "from": "render_queue",
+      "to": "job_queue"
+    },
+    {
+      "from": "sync_history",
+      "to": "sync_status"
+    },
+    {
+      "from": "sync_history",
+      "to": "job_queue"
+    },
+    {
+      "from": "notifications",
+      "to": "job_queue"
+    }
+  ],
+  "views": [
+    "unified_chip_data",
+    "unified_events",
+    "unified_players",
+    "v_chip_count_latest",
+    "v_event_summary",
+    "v_integrity_cross_schema_status",
+    "v_integrity_data_status",
+    "v_integrity_fk_status",
+    "v_integrity_summary",
+    "v_job_queue_summary",
+    "v_leaderboard",
+    "v_player_stats",
+    "v_recent_hands",
+    "v_render_at_risk",
+    "v_render_chip_display",
+    "v_render_elimination",
+    "v_render_payout",
+    "v_render_payout_gfx",
+    "v_session_summary",
+    "v_showdown_players",
+    "v_sync_dashboard"
+  ],
+  "functions": [
+    "claim_next_job",
+    "complete_job",
+    "disable_json_sync_triggers",
+    "enable_json_sync_triggers",
+    "format_bbs",
+    "format_bbs_safe",
+    "format_blinds",
+    "format_chips",
+    "format_chips_comma",
+    "format_chips_safe",
+    "format_chips_short",
+    "format_currency",
+    "format_currency_cents",
+    "format_currency_from_int",
+    "format_currency_safe",
+    "format_date",
+    "format_date_short",
+    "format_number",
+    "format_percent",
+    "format_time",
+    "format_time_12h",
+    "generate_player_code",
+    "generate_player_hash",
+    "get_at_risk_data",
+    "get_chip_comparison_data",
+    "get_chip_display_data",
+    "get_chip_flow_data",
+    "get_chips_n_hands_ago",
+    "get_config",
+    "get_elimination_data",
+    "get_flag_path",
+    "get_next_cue_item",
+    "get_payout_data",
+    "get_player_field_with_override",
+    "get_player_history_data",
+    "get_player_name_data",
+    "increment_template_usage",
+    "log_activity",
+    "log_manual_audit",
+    "normalize_manual_player_name",
+    "normalize_player_name",
+    "parse_iso8601_duration",
+    "run_full_integrity_check",
+    "set_manual_normalized_name",
+    "set_normalized_name",
+    "set_player_code",
+    "sync_json_gfx_sessions_to_public",
+    "sync_json_hand_actions_to_public",
+    "sync_json_hand_cards_to_public",
+    "sync_json_hand_players_to_public",
+    "sync_json_hand_results_to_public",
+    "sync_json_hands_to_public",
+    "transition_cue_item_status",
+    "update_cue_sheet_stats",
+    "update_cue_updated_at_column",
+    "update_event_player_stats",
+    "update_event_rankings",
+    "update_manual_updated_at_column",
+    "update_session_stats",
+    "update_sync_completion",
+    "update_updated_at_column",
+    "update_wsop_updated_at_column",
+    "validate_cross_schema_integrity",
+    "validate_data_consistency",
+    "validate_fk_integrity",
+    "validate_mapping_slot_range",
+    "validate_transform_params"
+  ],
+  "issues": [
+    "뷰 의존성 오류: v_sync_dashboard → LATERAL (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_render_payout → LATERAL (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_render_payout_gfx → LATERAL (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_render_at_risk → ranked_players (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_fk_status → validate_fk_integrity (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_data_status → validate_data_consistency (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_cross_schema_status → validate_cross_schema_integrity (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_summary → validate_data_consistency (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_summary → validate_cross_schema_integrity (테이블/뷰 미존재)",
+    "뷰 의존성 오류: v_integrity_summary → validate_fk_integrity (테이블/뷰 미존재)",
+    "순환 참조 감지: cue_sheets 테이블에서 시작",
+    "순환 참조 감지: cue_items 테이블에서 시작",
+    "순환 참조 감지: gfx_triggers 테이블에서 시작",
+    "순환 참조 감지: job_queue 테이블에서 시작",
+    "순환 참조 감지: render_queue 테이블에서 시작",
+    "순환 참조 감지: sync_history 테이블에서 시작",
+    "순환 참조 감지: notifications 테이블에서 시작"
+  ],
+  "status": "FAIL"
+}

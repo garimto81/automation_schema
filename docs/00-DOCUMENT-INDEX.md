@@ -1,7 +1,7 @@
 # 00. 문서 인덱스 및 그룹 관리
 
-**Version**: 2.2.0
-**Last Updated**: 2026-01-19
+**Version**: 2.4.0
+**Last Updated**: 2026-01-20
 **Status**: Active
 **Project**: Automation DB Schema
 
@@ -15,7 +15,8 @@ docs/
 ├── 01-DATA_FLOW.md             # 전체 데이터 흐름 개요
 ├── 10-Internal-Reference.md    # 내부 참조 문서
 ├── 11-LARGE-FILE-CHUNKING-STRATEGY.md  # 대용량 파일 청킹 전략
-├── GFX_SUPABASE_CUESHEET_MAPPING.md    # ⭐ 3계층 통합 매핑 (NEW)
+├── GFX_SUPABASE_CUESHEET_MAPPING.md    # 3계층 통합 매핑
+├── MAPPING_DIAGRAM.md          # ⭐ GFX→DB→AEP 시각화 다이어그램 (NEW)
 │
 ├── gfx-json/                   # GFX JSON 관련 문서
 │   ├── 02-GFX-JSON-DB.md
@@ -135,7 +136,8 @@ docs/
 │   01-DATA_FLOW.md          ─── 전체 데이터 흐름 개요                         │
 │   10-Internal-Reference.md ─── 내부 참조                                    │
 │   11-LARGE-FILE-CHUNKING.md ── 대용량 파일 청킹 전략                         │
-│   GFX_SUPABASE_CUESHEET_MAPPING.md ── ⭐ 3계층 통합 매핑 (JSON→DB→방송)     │
+│   GFX_SUPABASE_CUESHEET_MAPPING.md ── 3계층 통합 매핑 (JSON→DB→방송)        │
+│   MAPPING_DIAGRAM.md ──────── ⭐ GFX→DB→AEP 시각화 다이어그램 (26 AEP)       │
 └─────────────────────────────────────────────────────────────────────────────┘
          │
          ▼
@@ -215,7 +217,8 @@ docs/
 | `01-DATA_FLOW.md` | 2.0.0 | 2026-01-16 | ✅ Active |
 | `10-Internal-Reference.md` | - | - | Reference |
 | `11-LARGE-FILE-CHUNKING-STRATEGY.md` | - | 2026-01-19 | ✅ Active |
-| `GFX_SUPABASE_CUESHEET_MAPPING.md` | 1.0.0 | 2026-01-19 | ✅ **NEW** |
+| `GFX_SUPABASE_CUESHEET_MAPPING.md` | 1.0.0 | 2026-01-19 | ✅ Active |
+| `MAPPING_DIAGRAM.md` | 1.0.0 | 2026-01-20 | ✅ **NEW** |
 | **gfx-json/** ||||
 | `02-GFX-JSON-DB.md` | 1.1.0 | 2026-01-16 | ✅ Active |
 | `GFX_JSON_COMPREHENSIVE_ANALYSIS.md` | 1.0.0 | 2026-01-19 | ✅ Active |
@@ -269,7 +272,8 @@ docs/
 |--------|----------------|
 | GFX JSON | gfx-json/GFX_JSON_COMPREHENSIVE_ANALYSIS.md |
 | Cuesheet | cuesheet/CUESHEET_JSON_MAPPING.md |
-| **3계층 통합** | GFX_SUPABASE_CUESHEET_MAPPING.md |
+| 3계층 통합 | GFX_SUPABASE_CUESHEET_MAPPING.md |
+| **GFX→DB→AEP 시각화** | MAPPING_DIAGRAM.md |
 
 ---
 
@@ -311,6 +315,7 @@ supabase db dump --schema public > docs/supabase/current_schema_dump.sql
 
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
+| 2.4.0 | 2026-01-20 | MAPPING_DIAGRAM.md 추가 (GFX→DB→AEP 시각화 다이어그램) |
 | 2.3.0 | 2026-01-25 | 스키마 변경 이력 섹션 추가, BIGINT 마이그레이션 반영 |
 | 2.2.0 | 2026-01-19 | GFX→Supabase→Cuesheet 3계층 통합 매핑 문서 추가 |
 | 2.1.0 | 2026-01-19 | Cuesheet Day 1A~5 전체 분석 통합 (CUESHEET_FIELD_ANALYSIS.md v2.0) |

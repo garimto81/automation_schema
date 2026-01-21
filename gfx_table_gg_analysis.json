@@ -1,0 +1,775 @@
+{
+  "source": "table-GG",
+  "files_analyzed": 6,
+  "total_fields": 60,
+  "structure": {
+    "CreatedDateTimeUTC": "string",
+    "EventTitle": "string",
+    "Hands": "array",
+    "ID": "integer",
+    "Payouts": "array",
+    "SoftwareVersion": "string",
+    "Type": "string"
+  },
+  "fields": {
+    "CreatedDateTimeUTC": {
+      "type": "string",
+      "sample_values": [
+        "2025-10-15T10:54:43.1992165Z",
+        "2025-10-16T08:50:21.1467634Z",
+        "2025-10-17T10:10:09.7967686Z",
+        "2025-10-18T11:49:46.7159576Z",
+        "2025-10-19T13:38:53.8222042Z",
+        "2025-10-20T10:45:56.1171011Z"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "날짜/시간 정보",
+      "total_occurrences": 6
+    },
+    "EventTitle": {
+      "type": "string",
+      "sample_values": [
+        ""
+      ],
+      "null_ratio": 1.0,
+      "description_hint": "게임 이벤트",
+      "total_occurrences": 6
+    },
+    "Hands": {
+      "type": "array",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 6
+    },
+    "Hands[*].AnteAmt": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        200,
+        300,
+        2000,
+        3000,
+        4000,
+        5000,
+        6000,
+        8000,
+        10000
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].BetStructure": {
+      "type": "string",
+      "sample_values": [
+        "NOLIMIT"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "베팅 정보",
+      "total_occurrences": 323
+    },
+    "Hands[*].BombPotAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].Description": {
+      "type": "string",
+      "sample_values": [
+        ""
+      ],
+      "null_ratio": 1.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].Duration": {
+      "type": "string",
+      "sample_values": [
+        "PT35M37.2477537S",
+        "PT19.5488032S",
+        "PT13M25.5865565S",
+        "PT3M26.9826834S",
+        "PT2M3.7197434S",
+        "PT3M20.9238466S",
+        "PT1M43.6794974S",
+        "PT2M28.0313826S",
+        "PT2M11.869761S",
+        "PT1M9.2077151S"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].Events": {
+      "type": "array",
+      "sample_values": [],
+      "null_ratio": 0.003,
+      "description_hint": "게임 이벤트",
+      "total_occurrences": 323
+    },
+    "Hands[*].Events[*].BetAmt": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        500,
+        3500,
+        10500,
+        700,
+        2200,
+        1200,
+        400,
+        1100,
+        2000
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].BoardCards": {
+      "type": "string",
+      "sample_values": [
+        "9h",
+        "6h",
+        "ks",
+        "3c",
+        "10c",
+        "7h",
+        "5d",
+        "6d",
+        "5h",
+        "8d"
+      ],
+      "null_ratio": 0.807,
+      "description_hint": "카드 정보",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].BoardNum": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        1
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].DateTimeUTC": {
+      "type": "null",
+      "sample_values": [],
+      "null_ratio": 1.0,
+      "description_hint": "날짜/시간 정보",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].EventType": {
+      "type": "string",
+      "sample_values": [
+        "FOLD",
+        "BET",
+        "CALL",
+        "BOARD CARD",
+        "CHECK",
+        "ALL IN"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "게임 이벤트",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].NumCardsDrawn": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].PlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        8,
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 4143
+    },
+    "Hands[*].Events[*].Pot": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        500,
+        1000,
+        1300,
+        1800,
+        2300,
+        5800,
+        9300,
+        19800,
+        1200
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "팟 금액",
+      "total_occurrences": 4143
+    },
+    "Hands[*].FlopDrawBlinds": {
+      "type": "object",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "블라인드 정보",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.AnteType": {
+      "type": "string",
+      "sample_values": [
+        "BB_ANTE_BB1ST"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "블라인드 정보",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.BigBlindAmt": {
+      "type": "integer",
+      "sample_values": [
+        800,
+        200,
+        300,
+        2000,
+        3000,
+        4000,
+        5000,
+        6000,
+        8000,
+        10000
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.BigBlindPlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        8,
+        9,
+        7,
+        2,
+        3,
+        4,
+        5,
+        6
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.BlindLevel": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "블라인드 정보",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.ButtonPlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        1,
+        7,
+        4,
+        5,
+        8,
+        2,
+        3,
+        6,
+        9
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.SmallBlindAmt": {
+      "type": "integer",
+      "sample_values": [
+        80,
+        100,
+        200,
+        1000,
+        1500,
+        2000,
+        3000,
+        4000,
+        5000,
+        6000
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.SmallBlindPlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        7,
+        8,
+        5,
+        2,
+        3,
+        4,
+        6,
+        9
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.ThirdBlindAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].FlopDrawBlinds.ThirdBlindPlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].GameClass": {
+      "type": "string",
+      "sample_values": [
+        "FLOP"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].GameVariant": {
+      "type": "string",
+      "sample_values": [
+        "HOLDEM"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].HandNum": {
+      "type": "integer",
+      "sample_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].NumBoards": {
+      "type": "integer",
+      "sample_values": [
+        1
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].Players": {
+      "type": "array",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].Players[*].AggressionFrequencyPercent": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        42,
+        40,
+        54,
+        72,
+        44,
+        50,
+        66,
+        53,
+        62
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].BlindBetStraddleAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].CumulativeWinningsAmt": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        -80,
+        80,
+        -160,
+        160,
+        15300,
+        -100,
+        -15200,
+        -700,
+        3200
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].EliminationRank": {
+      "type": "integer",
+      "sample_values": [
+        -1
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].EndStackAmt": {
+      "type": "integer",
+      "sample_values": [
+        1224444,
+        2455123,
+        3151166,
+        455523388,
+        9000,
+        8920,
+        9080,
+        6000000,
+        50000,
+        65300
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].HoleCards": {
+      "type": "array",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].HoleCards[*]": {
+      "type": "string",
+      "sample_values": [
+        "",
+        "10d 9d",
+        "ks qs",
+        "qd 8h",
+        "kd 10d",
+        "9c 5d",
+        "8d 2c",
+        "kc jd",
+        "9s 7d",
+        "9s 3c"
+      ],
+      "null_ratio": 0.02,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].LongName": {
+      "type": "string",
+      "sample_values": [
+        "jhkg",
+        "SAD",
+        "asd",
+        "ASD",
+        "",
+        "Cristian Ivanus",
+        "Garik Tamasian",
+        "Iurii Okolovich",
+        "Moussa Ahmad",
+        "Mbasel Khabbazeh"
+      ],
+      "null_ratio": 0.003,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].Name": {
+      "type": "string",
+      "sample_values": [
+        "jhkg",
+        "SAD",
+        "asd",
+        "ASD",
+        "J",
+        "K",
+        "U",
+        "Ivanus",
+        "Tamasian",
+        "Okolovich"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].PlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].PreFlopRaisePercent": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        100,
+        50,
+        66,
+        33,
+        75,
+        20,
+        40,
+        60,
+        16
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].SittingOut": {
+      "type": "boolean",
+      "sample_values": [
+        false
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].StartStackAmt": {
+      "type": "integer",
+      "sample_values": [
+        1224444,
+        2455123,
+        3151166,
+        455523388,
+        7673820,
+        6442555,
+        9000,
+        6000000,
+        8920,
+        9080
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].VPIPPercent": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        100,
+        50,
+        66,
+        75,
+        20,
+        40,
+        80,
+        16,
+        33
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].Players[*].WentToShowDownPercent": {
+      "type": "integer",
+      "sample_values": [
+        0,
+        100,
+        50,
+        66,
+        33,
+        25,
+        20,
+        60,
+        28,
+        42
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "플레이어 관련 데이터",
+      "total_occurrences": 2315
+    },
+    "Hands[*].RecordingOffsetStart": {
+      "type": "string",
+      "sample_values": [
+        "P739538DT16H3M20.9005907S",
+        "P739538DT18H24M45.3306378S",
+        "P739538DT21H44M4.2500282S",
+        "P739539DT13H37M1.4537919S",
+        "P739539DT13H41M33.0265843S",
+        "P739539DT13H44M16.0150117S",
+        "P739539DT13H49M10.014521S",
+        "P739539DT13H52M29.1350332S",
+        "P739539DT13H55M38.6575857S",
+        "P739539DT13H58M48.2273958S"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].RunItNumTimes": {
+      "type": "integer",
+      "sample_values": [
+        1
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].StartDateTimeUTC": {
+      "type": "string",
+      "sample_values": [
+        "2025-10-15T12:03:20.9005907Z",
+        "2025-10-15T14:24:45.3306378Z",
+        "2025-10-15T17:44:04.2500282Z",
+        "2025-10-16T09:37:01.4537919Z",
+        "2025-10-16T09:41:33.0265843Z",
+        "2025-10-16T09:44:16.0150117Z",
+        "2025-10-16T09:49:10.0145210Z",
+        "2025-10-16T09:52:29.1350332Z",
+        "2025-10-16T09:55:38.6575857Z",
+        "2025-10-16T09:58:48.2273958Z"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "날짜/시간 정보",
+      "total_occurrences": 323
+    },
+    "Hands[*].StudLimits": {
+      "type": "object",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "핸드 데이터",
+      "total_occurrences": 323
+    },
+    "Hands[*].StudLimits.BringInAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].StudLimits.BringInPlayerNum": {
+      "type": "integer",
+      "sample_values": [
+        1
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "번호/숫자 식별자",
+      "total_occurrences": 323
+    },
+    "Hands[*].StudLimits.HighLimitAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "Hands[*].StudLimits.LowLimitAmt": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "금액/수량",
+      "total_occurrences": 323
+    },
+    "ID": {
+      "type": "integer",
+      "sample_values": [
+        638961224831992165,
+        638962014211467634,
+        638962926097967686,
+        638963849867159576,
+        638964779338222042,
+        638965539561171011
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "기타",
+      "total_occurrences": 6
+    },
+    "Payouts": {
+      "type": "array",
+      "sample_values": [],
+      "null_ratio": 0.0,
+      "description_hint": "기타",
+      "total_occurrences": 6
+    },
+    "Payouts[*]": {
+      "type": "integer",
+      "sample_values": [
+        0
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "기타",
+      "total_occurrences": 60
+    },
+    "SoftwareVersion": {
+      "type": "string",
+      "sample_values": [
+        "PokerGFX 3.2"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "기타",
+      "total_occurrences": 6
+    },
+    "Type": {
+      "type": "string",
+      "sample_values": [
+        "FEATURE_TABLE"
+      ],
+      "null_ratio": 0.0,
+      "description_hint": "타입/분류",
+      "total_occurrences": 6
+    }
+  }
+}

@@ -1,0 +1,1041 @@
+{
+  "generated_at": "2026-01-19T17:28:04.719000",
+  "files_analyzed": 28,
+  "statistics": {
+    "root.ID": {
+      "total_occurrences": 28,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        638961224831992165,
+        638961999170907267,
+        638962014211467634,
+        638962926097967686,
+        638963849867159576,
+        638964597346400480,
+        638964611175191251,
+        638964779338222042,
+        638965449655751379,
+        638965452050668708
+      ],
+      "numeric_stats": {
+        "min": 638961224831992165,
+        "max": 638966318331324926,
+        "avg": 6.389641086455351e+17,
+        "count": 28
+      }
+    },
+    "root.CreatedDateTimeUTC": {
+      "total_occurrences": 28,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "2025-10-15T10:54:43.1992165Z",
+        "2025-10-16T08:25:17.0907267Z",
+        "2025-10-16T08:50:21.1467634Z",
+        "2025-10-17T10:10:09.7967686Z",
+        "2025-10-18T11:49:46.7159576Z",
+        "2025-10-19T08:35:34.6400480Z",
+        "2025-10-19T08:58:37.5191251Z",
+        "2025-10-19T13:38:53.8222042Z",
+        "2025-10-20T08:16:05.5751379Z",
+        "2025-10-20T08:20:05.0668708Z"
+      ],
+      "numeric_stats": null
+    },
+    "root.SoftwareVersion": {
+      "total_occurrences": 28,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "PokerGFX 3.2"
+      ],
+      "numeric_stats": null
+    },
+    "root.Type": {
+      "total_occurrences": 28,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "FEATURE_TABLE",
+        "FINAL_TABLE"
+      ],
+      "numeric_stats": null
+    },
+    "root.EventTitle": {
+      "total_occurrences": 28,
+      "null_ratio": 1.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [],
+      "numeric_stats": null
+    },
+    "root.Payouts": {
+      "total_occurrences": 28,
+      "null_ratio": 0.0,
+      "types": [
+        "array"
+      ],
+      "unique_values": [
+        [
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      ],
+      "numeric_stats": null
+    },
+    "hands.HandNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 173,
+        "avg": 56.270686337395766,
+        "count": 1559
+      }
+    },
+    "hands.AnteAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        200,
+        300,
+        2000,
+        3000,
+        4000,
+        5000,
+        6000,
+        8000,
+        10000
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 600000,
+        "avg": 56362.668377164846,
+        "count": 1559
+      }
+    },
+    "hands.BetStructure": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "NOLIMIT"
+      ],
+      "numeric_stats": null
+    },
+    "hands.BombPotAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.Description": {
+      "total_occurrences": 1559,
+      "null_ratio": 1.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [],
+      "numeric_stats": null
+    },
+    "hands.Duration": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "PT35M37.2477537S",
+        "PT19.5488032S",
+        "PT13M25.5865565S",
+        "PT1M23.1911258S",
+        "PT2M56.3404049S",
+        "PT3M26.9826834S",
+        "PT2M3.7197434S",
+        "PT3M20.9238466S",
+        "PT1M43.6794974S",
+        "PT2M28.0313826S"
+      ],
+      "numeric_stats": null
+    },
+    "hands.GameClass": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "FLOP"
+      ],
+      "numeric_stats": null
+    },
+    "hands.GameVariant": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "HOLDEM"
+      ],
+      "numeric_stats": null
+    },
+    "hands.NumBoards": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 1,
+        "avg": 1.0,
+        "count": 1559
+      }
+    },
+    "hands.RunItNumTimes": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 1,
+        "avg": 1.0,
+        "count": 1559
+      }
+    },
+    "hands.StartDateTimeUTC": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "2025-10-15T12:03:20.9005907Z",
+        "2025-10-15T14:24:45.3306378Z",
+        "2025-10-15T17:44:04.2500282Z",
+        "2025-10-16T08:27:15.0463609Z",
+        "2025-10-16T08:31:42.6301089Z",
+        "2025-10-16T09:37:01.4537919Z",
+        "2025-10-16T09:41:33.0265843Z",
+        "2025-10-16T09:44:16.0150117Z",
+        "2025-10-16T09:49:10.0145210Z",
+        "2025-10-16T09:52:29.1350332Z"
+      ],
+      "numeric_stats": null
+    },
+    "hands.RecordingOffsetStart": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "P739538DT16H3M20.9005907S",
+        "P739538DT18H24M45.3306378S",
+        "P739538DT21H44M4.2500282S",
+        "P739539DT12H27M15.0463609S",
+        "P739539DT12H31M42.6301089S",
+        "P739539DT13H37M1.4537919S",
+        "P739539DT13H41M33.0265843S",
+        "P739539DT13H44M16.0150117S",
+        "P739539DT13H49M10.014521S",
+        "P739539DT13H52M29.1350332S"
+      ],
+      "numeric_stats": null
+    },
+    "hands.FlopDrawBlinds.AnteType": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "BB_ANTE_BB1ST"
+      ],
+      "numeric_stats": null
+    },
+    "hands.FlopDrawBlinds.BigBlindAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        800,
+        180000,
+        200,
+        300,
+        2000,
+        3000,
+        4000,
+        5000,
+        6000,
+        8000
+      ],
+      "numeric_stats": {
+        "min": 200,
+        "max": 600000,
+        "avg": 56595.125080179605,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.BigBlindPlayerNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        8,
+        9,
+        3,
+        4,
+        7,
+        2,
+        5,
+        6
+      ],
+      "numeric_stats": {
+        "min": 2,
+        "max": 9,
+        "avg": 5.470173187940988,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.BlindLevel": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.ButtonPlayerNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1,
+        7,
+        2,
+        4,
+        5,
+        8,
+        3,
+        6,
+        9,
+        10
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 10,
+        "avg": 5.454778704297627,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.SmallBlindAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        80,
+        5000,
+        100,
+        200,
+        1000,
+        1500,
+        2000,
+        3000,
+        4000,
+        6000
+      ],
+      "numeric_stats": {
+        "min": 80,
+        "max": 300000,
+        "avg": 28362.052597819114,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.SmallBlindPlayerNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        7,
+        8,
+        2,
+        3,
+        5,
+        4,
+        6,
+        9,
+        1
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 9,
+        "avg": 5.458627325208467,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.ThirdBlindAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.FlopDrawBlinds.ThirdBlindPlayerNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.StudLimits.BringInAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.StudLimits.BringInPlayerNum": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 1,
+        "avg": 1.0,
+        "count": 1559
+      }
+    },
+    "hands.StudLimits.HighLimitAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "hands.StudLimits.LowLimitAmt": {
+      "total_occurrences": 1559,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 1559
+      }
+    },
+    "players.PlayerNum": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10
+      ],
+      "numeric_stats": {
+        "min": 1,
+        "max": 10,
+        "avg": 5.4667669927263605,
+        "count": 11961
+      }
+    },
+    "players.Name": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "jhkg",
+        "SAD",
+        "asd",
+        "ASD",
+        "J",
+        "K",
+        "U",
+        "SEAT 1",
+        "SEAT 2",
+        "SEAT 3"
+      ],
+      "numeric_stats": null
+    },
+    "players.LongName": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0152,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "jhkg",
+        "SAD",
+        "asd",
+        "ASD",
+        "Cristian Ivanus",
+        "Garik Tamasian",
+        "Iurii Okolovich",
+        "Moussa Ahmad",
+        "Mbasel Khabbazeh",
+        "Darius Gadeikis"
+      ],
+      "numeric_stats": null
+    },
+    "players.StartStackAmt": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1224444,
+        2455123,
+        3151166,
+        455523388,
+        7673820,
+        6442555,
+        9000,
+        6000000,
+        8920,
+        9080
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 455523388,
+        "avg": 1873370.1234010535,
+        "count": 11961
+      }
+    },
+    "players.EndStackAmt": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1224444,
+        2455123,
+        3151166,
+        455523388,
+        9000,
+        8920,
+        9080,
+        6000000,
+        4000000,
+        7995000
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 455523388,
+        "avg": 1910506.4982024913,
+        "count": 11961
+      }
+    },
+    "players.CumulativeWinningsAmt": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        -80,
+        80,
+        -160,
+        160,
+        -5000,
+        5000,
+        -175000,
+        -180000,
+        240000
+      ],
+      "numeric_stats": {
+        "min": -22375000,
+        "max": 64725000,
+        "avg": 68407.12315023827,
+        "count": 11961
+      }
+    },
+    "players.HoleCards": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "array"
+      ],
+      "unique_values": [
+        [
+          ""
+        ],
+        [
+          "10d 9d"
+        ],
+        [
+          "ks qs"
+        ],
+        [
+          "7s 7h"
+        ],
+        [
+          "jd 9s"
+        ],
+        [
+          "4s 4d"
+        ],
+        [
+          "qd 8h"
+        ],
+        [
+          "kd 10d"
+        ],
+        [
+          "9c 5d"
+        ],
+        [
+          "8d 2c"
+        ]
+      ],
+      "numeric_stats": null
+    },
+    "players.SittingOut": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "boolean"
+      ],
+      "unique_values": [
+        false,
+        true
+      ],
+      "numeric_stats": {
+        "min": false,
+        "max": true,
+        "avg": 0.07741827606387426,
+        "count": 11961
+      }
+    },
+    "players.EliminationRank": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        -1,
+        9,
+        8,
+        7,
+        6,
+        5,
+        4,
+        3,
+        2
+      ],
+      "numeric_stats": {
+        "min": -1,
+        "max": 9,
+        "avg": -0.6956776189281833,
+        "count": 11961
+      }
+    },
+    "players.BlindBetStraddleAmt": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 11961
+      }
+    },
+    "players.VPIPPercent": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        100,
+        50,
+        66,
+        75,
+        20,
+        40,
+        80,
+        16,
+        33
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 100,
+        "avg": 26.72201320959786,
+        "count": 11961
+      }
+    },
+    "players.PreFlopRaisePercent": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        100,
+        50,
+        66,
+        33,
+        75,
+        20,
+        40,
+        60,
+        16
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 100,
+        "avg": 18.533149402223895,
+        "count": 11961
+      }
+    },
+    "players.AggressionFrequencyPercent": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        42,
+        40,
+        54,
+        72,
+        44,
+        50,
+        66,
+        53,
+        62
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 83,
+        "avg": 27.64467853858373,
+        "count": 11961
+      }
+    },
+    "players.WentToShowDownPercent": {
+      "total_occurrences": 11961,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        100,
+        50,
+        66,
+        33,
+        25,
+        20,
+        60,
+        28,
+        42
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 600,
+        "avg": 37.75252905275479,
+        "count": 11961
+      }
+    },
+    "events.EventType": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "string"
+      ],
+      "unique_values": [
+        "FOLD",
+        "CALL",
+        "BOARD CARD",
+        "CHECK",
+        "BET",
+        "ALL IN"
+      ],
+      "numeric_stats": null
+    },
+    "events.PlayerNum": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        9,
+        8,
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 9,
+        "avg": 4.402397602397603,
+        "count": 20020
+      }
+    },
+    "events.BetAmt": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        180000,
+        500,
+        3500,
+        10500,
+        700,
+        2200,
+        1200,
+        400,
+        1100
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 55000000,
+        "avg": 82083.88136863137,
+        "count": 20020
+      }
+    },
+    "events.Pot": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        185000,
+        365000,
+        545000,
+        725000,
+        905000,
+        1085000,
+        1260000,
+        500,
+        1000
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 44350000,
+        "avg": 134191.0492007992,
+        "count": 20020
+      }
+    },
+    "events.BoardNum": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0,
+        1
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 1,
+        "avg": 0.19625374625374625,
+        "count": 20020
+      }
+    },
+    "events.BoardCards": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.8037,
+      "types": [
+        "string",
+        "null"
+      ],
+      "unique_values": [
+        "6d",
+        "6s",
+        "6h",
+        "6c",
+        "jh",
+        "9h",
+        "ks",
+        "3c",
+        "10c",
+        "7h"
+      ],
+      "numeric_stats": null
+    },
+    "events.NumCardsDrawn": {
+      "total_occurrences": 20020,
+      "null_ratio": 0.0,
+      "types": [
+        "integer"
+      ],
+      "unique_values": [
+        0
+      ],
+      "numeric_stats": {
+        "min": 0,
+        "max": 0,
+        "avg": 0.0,
+        "count": 20020
+      }
+    },
+    "events.DateTimeUTC": {
+      "total_occurrences": 20020,
+      "null_ratio": 1.0,
+      "types": [
+        "null"
+      ],
+      "unique_values": [],
+      "numeric_stats": null
+    }
+  }
+}
